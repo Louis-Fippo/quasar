@@ -1,0 +1,70 @@
+// cellfate — décision de destin cellulaire (survie / apoptose / nécrose).
+// Modèle pédagogique inspiré de Calzone et al. (2010), MSB ; valué pour MaBoSS.
+// Compétition NF-kB (survie) vs Caspases (apoptose) vs ROS/MPT (nécrose),
+// déclenchée par le stimulus TNF. Booléen.
+
+node TNF {
+  logic = TNF;
+  rate_up = @logic ? $u_TNF : 0;
+  rate_down = @logic ? 0 : $d_TNF;
+}
+
+node FADD {
+  logic = TNF;
+  rate_up = @logic ? $u_FADD : 0;
+  rate_down = @logic ? 0 : $d_FADD;
+}
+
+node RIP1 {
+  logic = TNF & !Caspase8;
+  rate_up = @logic ? $u_RIP1 : 0;
+  rate_down = @logic ? 0 : $d_RIP1;
+}
+
+node NFkB {
+  logic = RIP1 & !Caspase8;
+  rate_up = @logic ? $u_NFkB : 0;
+  rate_down = @logic ? 0 : $d_NFkB;
+}
+
+node Caspase8 {
+  logic = FADD & !NFkB;
+  rate_up = @logic ? $u_Caspase8 : 0;
+  rate_down = @logic ? 0 : $d_Caspase8;
+}
+
+node Caspase3 {
+  logic = Caspase8 & !NFkB;
+  rate_up = @logic ? $u_Caspase3 : 0;
+  rate_down = @logic ? 0 : $d_Caspase3;
+}
+
+node ROS {
+  logic = RIP1 & !NFkB;
+  rate_up = @logic ? $u_ROS : 0;
+  rate_down = @logic ? 0 : $d_ROS;
+}
+
+node MPT {
+  logic = ROS;
+  rate_up = @logic ? $u_MPT : 0;
+  rate_down = @logic ? 0 : $d_MPT;
+}
+
+node Apoptosis {
+  logic = Caspase3;
+  rate_up = @logic ? $u_Apoptosis : 0;
+  rate_down = @logic ? 0 : $d_Apoptosis;
+}
+
+node Survival {
+  logic = NFkB;
+  rate_up = @logic ? $u_Survival : 0;
+  rate_down = @logic ? 0 : $d_Survival;
+}
+
+node Necrosis {
+  logic = MPT;
+  rate_up = @logic ? $u_Necrosis : 0;
+  rate_down = @logic ? 0 : $d_Necrosis;
+}

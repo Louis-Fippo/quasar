@@ -1,0 +1,12 @@
+# QUASAR ANX model — démonstration phase-type (D4).
+# Le gène 'g' peut atteindre l'état actif (g=1, but) via une maturation à 2
+# phases (Erlang), en compétition avec une dégradation (g=2) exponentielle.
+# L'expansion phase-type rend la compétition exacte (vs approximation taux moyen).
+model "phasetype-demo"
+
+automaton g [0, 1, 2]
+
+g: 0 -> 1 @ erlang(2, 4.0)
+g: 0 -> 2 @ 2.0
+
+init g=0

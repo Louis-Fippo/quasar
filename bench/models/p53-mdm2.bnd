@@ -1,0 +1,21 @@
+// p53-Mdm2 — boucle de rétroaction négative (oscillateur), modèle de référence.
+// Source pédagogique inspirée d'Abou-Jaoudé et al. ; valuée pour MaBoSS.
+// p53 activé par les dommages à l'ADN et inhibé par Mdm2 ; Mdm2 activé par p53.
+
+node DNAdam {
+  logic = DNAdam;
+  rate_up = @logic ? $u_DNAdam : 0;
+  rate_down = @logic ? 0 : $d_DNAdam;
+}
+
+node p53 {
+  logic = (DNAdam & !Mdm2);
+  rate_up = @logic ? $u_p53 : 0;
+  rate_down = @logic ? 0 : $d_p53;
+}
+
+node Mdm2 {
+  logic = p53;
+  rate_up = @logic ? $u_Mdm2 : 0;
+  rate_down = @logic ? 0 : $d_Mdm2;
+}

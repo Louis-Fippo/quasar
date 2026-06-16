@@ -1,0 +1,20 @@
+# QUASAR ANX model
+# p53-Mdm2 — boucle de rétroaction négative (oscillateur).
+# Équivalent au modèle MaBoSS p53-mdm2.bnd/.cfg (import faithful).
+model "p53-mdm2"
+
+automaton DNAdam [0, 1]
+automaton Mdm2 [0, 1]
+automaton p53 [0, 1]
+
+DNAdam: 0 -> 1 when DNAdam=1 @ 1.0
+DNAdam: 1 -> 0 when DNAdam=0 @ 1.0
+
+p53: 0 -> 1 when DNAdam=1 and Mdm2=0 @ 1.0
+p53: 1 -> 0 when DNAdam=0 @ 0.5
+p53: 1 -> 0 when Mdm2=1 @ 0.5
+
+Mdm2: 0 -> 1 when p53=1 @ 0.8
+Mdm2: 1 -> 0 when p53=0 @ 1.0
+
+init DNAdam=1, Mdm2=0, p53=0
