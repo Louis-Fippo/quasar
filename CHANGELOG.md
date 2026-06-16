@@ -174,3 +174,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   (atteignabilité + #états) et `P(R) MDD = P(R) CTMC` sur réseaux multivalués
   aléatoires ; course multivaluée = `1/4` exact.
 - **bench/models/multivalued-demo.anx** ; **125 tests** au total.
+
+### Abstraction-raffinement CEGAR (§7.4)
+
+- **analysis/Cegar** : atteignabilité par abstraction-raffinement guidé par
+  contre-exemple. Encadre la réponse par deux abstractions exactes sur un ensemble
+  d'automates *visibles* `V` — `OA(V)` (préconditions hors-`V` abandonnées) et
+  `UA(V)` (transitions à précondition hors-`V` supprimées) ; raffine `V` avec les
+  automates des préconditions abandonnées jusqu'à décision. Sound et terminant
+  (converge vers le cône où `OA=UA`=exact), décide souvent avec `|V| ≪ |réseau|`.
+- **cli** : `transform abstract <model> --goal a=j [--refine cegar] [-o]` (verdict,
+  taille de l'abstraction, écriture optionnelle de la sur-approximation).
+- **Validation** : contrôle croisé property-based `CEGAR = oracle explicite` et
+  `visible ⊆ cône`. Démo : cellfate Apoptosis décidé avec 7/11 automates visibles.
+- **129 tests** au total.

@@ -130,6 +130,10 @@ booléen) et **backend symbolique multivalué par MDD** (`core/dd/Mdd` +
 `analysis/SymbolicMdd`) — atteignabilité, points fixes et `P(R)` exacts pour
 `|S(a)| ≥ 2`, validés contre l'oracle explicite et les backends booléens.
 
-Reste à venir : `transform abstract` (CEGAR), réordonnancement dynamique des
-variables des diagrammes, puis Phase 3 (bindings Python `pyquasar`, inférence de
-taux depuis séries temporelles).
+Livré aussi : **`transform abstract` (CEGAR)** — atteignabilité par
+abstraction-raffinement (`analysis/Cegar`), encadrée par `OA(V)`/`UA(V)` sur un
+ensemble d'automates visibles raffiné jusqu'à décision.
+
+Reste à venir : réordonnancement dynamique des variables des diagrammes (taille
+des DD), CEGAR quantitatif (bornes sur `P(R)` par abstraction), puis Phase 3
+(bindings Python `pyquasar`, inférence de taux depuis séries temporelles).

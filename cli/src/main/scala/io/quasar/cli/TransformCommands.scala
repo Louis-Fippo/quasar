@@ -2,8 +2,8 @@ package io.quasar.cli
 
 import cats.syntax.all.*
 import com.monovore.decline.*
-import io.quasar.analysis.Transform
-import io.quasar.core.ir.LocalState
+import io.quasar.analysis.{Cegar, Transform}
+import io.quasar.core.ir.{Context, LocalState}
 import io.quasar.io.AnxFormat
 
 /** Groupe `quasar transform` — transformations de modèle (§7.4). */
@@ -61,4 +61,46 @@ object TransformCommands:
     }
   }
 
-  val command: Opts[Run] = reduceCmd.orElse(sliceCmd).orElse(booleanizeCmd)
+  // --- abstract (CEGAR) ----------------------------------------------------
+  private val abstractCmd = Opts.subcommand("abstract", "abstraction-raffinement (CEGAR)") {
+    (
+      modelArg,
+      Opts.option[String]("goal", "objectif a=j"),
+      Opts.option[String]("from", "contexte initial").orNone,
+      Opts.option[String]("refine", "méthode de raffinement").withDefault("cegar"),
+      outOpt
+    ).mapN { (path, g, from, refine, out) => () =>
+      if refine != "cegar" then Console.fail(s"méthode de raffinement inconnue : $refine")
+      else
+        (for
+          net <- Console.loadModel(path)
+          goal <- LocalState.parse(g).left.map(Console.fail)
+          ctx <- from match
+            case Some(s) => Context.parse(s).left.map(Console.fail)
+            case None => Right(net.metadata.initial.getOrElse(Context.empty))
+        yield (net, goal, ctx)) match
+          case Left(c) => c
+          case Right((net, goal, ctx)) =>
+            val r = Cegar.reachability(net, ctx, goal)
+            Console.out(s"Objectif    : $goal")
+            Console.out(s"Verdict     : ${r.verdict.label}")
+            Console.out(
+              s"Abstraction : ${r.visible.size}/${net.size} automates visibles, " +
+                s"cône=${r.coneSize}, ${r.rounds} raffinement(s)"
+            )
+            Console.out(s"Visibles    : ${r.visible.toList.sorted.mkString(", ")}")
+            // -o : écrit l'abstraction (sur-approximation sur les automates visibles)
+            out.foreach { o =>
+              val abs = Cegar.overApprox(net, r.visible)
+              io.quasar.io.Exporter.toFile(abs, o, Some(io.quasar.io.Format.Anx)) match
+                case Right(_) => Console.out(s"abstraction -> $o")
+                case Left(e) => Console.err(e.toString)
+            }
+            r.verdict match
+              case io.quasar.core.Verdict.Unreachable => 1
+              case _ => 0
+    }
+  }
+
+  val command: Opts[Run] =
+    reduceCmd.orElse(sliceCmd).orElse(booleanizeCmd).orElse(abstractCmd)
