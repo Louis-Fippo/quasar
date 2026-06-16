@@ -159,3 +159,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 - **Validation** : contrôle croisé property-based `P(R) MTBDD = P(R) CTMC explicite`
   sur réseaux booléens aléatoires ; course booléenne = `1/3` exact.
 - **Tests** : 117 au total.
+
+### Backend symbolique multivalué (MDD, §6.4)
+
+- **core/dd/Mdd** : diagramme de décision multivalué auto-contenu (variables à
+  domaine arbitraire, terminaux réels) — généralise BDD/MTBDD ; `apply`, restriction,
+  sommes/max d'abstraction, `relabel`, évaluation.
+- **analysis/SymbolicMdd** : atteignabilité, points fixes et `P(R)` **exacts** pour
+  les réseaux **multivalués** (`|S(a)| ≥ 2`), sans énumérer l'espace d'états —
+  point fixe d'image pour l'atteignabilité, itération de valeur pour `P(R)`.
+- **cli** : `analyze reachability|probability --symbolic` route désormais vers le
+  MDD (booléen ou multivalué).
+- **Validation** : contrôles croisés property-based `MDD = oracle explicite`
+  (atteignabilité + #états) et `P(R) MDD = P(R) CTMC` sur réseaux multivalués
+  aléatoires ; course multivaluée = `1/4` exact.
+- **bench/models/multivalued-demo.anx** ; **125 tests** au total.

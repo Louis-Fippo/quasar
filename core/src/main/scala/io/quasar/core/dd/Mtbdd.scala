@@ -1,8 +1,8 @@
 package io.quasar.core.dd
 
-/** Opérations binaires sur les terminaux d'un MTBDD. */
+/** Opérations binaires sur les terminaux d'un (MT)BDD/MDD. */
 enum MtOp:
-  case Add, Mul, Sub, Div, Max
+  case Add, Mul, Sub, Div, Max, Min
 
   def apply(a: Double, b: Double): Double = this match
     case Add => a + b
@@ -10,6 +10,7 @@ enum MtOp:
     case Sub => a - b
     case Div => if b == 0.0 then 0.0 else a / b // 0/0 et x/0 -> 0 (états absorbants)
     case Max => math.max(a, b)
+    case Min => math.min(a, b)
 
 /**
  * Diagramme de décision multi-terminal (MTBDD) auto-contenu — backend symbolique numérique (§6.4).

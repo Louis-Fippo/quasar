@@ -2,14 +2,7 @@ package io.quasar.cli
 
 import cats.syntax.all.*
 import com.monovore.decline.*
-import io.quasar.analysis.{
-  Intervention,
-  Quantitative,
-  Reachability,
-  Scenarios,
-  Symbolic,
-  SymbolicCtmc
-}
+import io.quasar.analysis.{Intervention, Quantitative, Reachability, Scenarios, SymbolicMdd}
 import io.quasar.core.Verdict
 import io.quasar.core.ir.{AutomataNetwork, Context, LocalState}
 
@@ -45,7 +38,7 @@ object AnalyzeCommands:
 
   // --- reachability --------------------------------------------------------
   private val symbolicOpt =
-    Opts.flag("symbolic", "atteignabilité exacte par BDD (réseaux booléens)").orFalse
+    Opts.flag("symbolic", "calcul exact par diagramme de décision (BDD/MDD)").orFalse
 
   private val reachabilityCmd =
     Opts.subcommand("reachability", "atteignabilité qualitative OA/UA (ou exacte BDD)") {
@@ -54,25 +47,23 @@ object AnalyzeCommands:
           load(path, g, from) match
             case Left(code) => code
             case Right((net, ctx, goal)) if symbolic =>
-              Symbolic.reachability(net, ctx, goal) match
-                case Left(e) => Console.fail(e)
-                case Right(res) =>
-                  if json then
-                    Console.emitJson(
-                      Json.obj(
-                        "goal" -> Json.str(goal.toString),
-                        "method" -> Json.str("symbolic-bdd"),
-                        "reachable" -> Json.bool(res.goalReachable),
-                        "reachableStates" -> Json.num(res.reachableStates.toDouble),
-                        "bddNodes" -> Json.int(res.bddNodes)
-                      )
-                    )
-                  else
-                    Console.out(s"Objectif        : $goal")
-                    Console.out(s"Atteignable     : ${yesNo(res.goalReachable)}  (exact, BDD)")
-                    Console.out(s"États atteign.  : ${res.reachableStates}")
-                    Console.out(s"Nœuds BDD       : ${res.bddNodes}")
-                  if res.goalReachable then 0 else 1
+              val res = SymbolicMdd.reachability(net, ctx, goal)
+              if json then
+                Console.emitJson(
+                  Json.obj(
+                    "goal" -> Json.str(goal.toString),
+                    "method" -> Json.str("symbolic-mdd"),
+                    "reachable" -> Json.bool(res.goalReachable),
+                    "reachableStates" -> Json.num(res.reachableStates.toDouble),
+                    "ddNodes" -> Json.int(res.mddNodes)
+                  )
+                )
+              else
+                Console.out(s"Objectif        : $goal")
+                Console.out(s"Atteignable     : ${yesNo(res.goalReachable)}  (exact, MDD)")
+                Console.out(s"États atteign.  : ${res.reachableStates}")
+                Console.out(s"Nœuds DD        : ${res.mddNodes}")
+              if res.goalReachable then 0 else 1
             case Right((net, ctx, goal)) =>
               val r = Reachability.analyze(net, ctx, goal)
               if json then
@@ -153,7 +144,7 @@ object AnalyzeCommands:
 
   // --- probability ---------------------------------------------------------
   private val probabilityCmd =
-    Opts.subcommand("probability", "P(R) (exacte CTMC/MTBDD ou borne inférieure)") {
+    Opts.subcommand("probability", "P(R) (exacte CTMC/MDD ou borne inférieure)") {
       (modelArg, goalOpt, fromOpt, threshOpt, symbolicOpt, jsonOpt).mapN {
         (path, g, from, thr, symbolic, json) => () =>
           load(path, g, from) match
@@ -162,7 +153,7 @@ object AnalyzeCommands:
               // p : Either[erreur, (valeur, exact?)]
               val computed: Either[String, (Double, Boolean)] =
                 if symbolic then
-                  SymbolicCtmc.reachProbability(net, ctx, goal).map(r => (r.reachProbability, true))
+                  SymbolicMdd.reachProbability(net, ctx, goal).map(r => (r.reachProbability, true))
                 else
                   val q = Quantitative.analyze(net, ctx, goal)
                   Right(
@@ -188,7 +179,7 @@ object AnalyzeCommands:
                     )
                   else
                     val tag =
-                      if exact then if symbolic then "exact, MTBDD" else "exact, CTMC"
+                      if exact then if symbolic then "exact, MDD" else "exact, CTMC"
                       else "borne inférieure"
                     Console.out(f"P($goal) ${if exact then "=" else "≥"} $p%.6g  ($tag)")
                     meets.foreach(mm => Console.out(s"P(R) ≥ ${thr.get} : ${yesNo(mm)}"))

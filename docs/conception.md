@@ -125,10 +125,11 @@ Livré aussi : **projection bioLQM** (`module biolqm`) — import SBML-qual / Bo
 GINML / booleannet via bioLQM (reconstruction des transitions unitaires depuis les
 MDD) et export ANX → SBML-qual ; `model biolqm` signale les pertes (D1).
 
-Livré aussi : **`P(R)` symbolique par MTBDD** (`core/dd/Mtbdd` + `analysis/SymbolicCtmc`)
-— itération de valeur sur diagrammes à terminaux réels, validée contre la CTMC
-explicite (réseaux booléens exponentiels).
+Livré aussi : **`P(R)` symbolique par MTBDD** (`core/dd/Mtbdd` + `analysis/SymbolicCtmc`,
+booléen) et **backend symbolique multivalué par MDD** (`core/dd/Mdd` +
+`analysis/SymbolicMdd`) — atteignabilité, points fixes et `P(R)` exacts pour
+`|S(a)| ≥ 2`, validés contre l'oracle explicite et les backends booléens.
 
-Reste à venir : backend symbolique **multivalué** (MDD) et MTBDD pour les modèles
-non booléens, `transform abstract` (CEGAR), puis Phase 3 (bindings Python `pyquasar`,
-inférence de taux depuis séries temporelles).
+Reste à venir : `transform abstract` (CEGAR), réordonnancement dynamique des
+variables des diagrammes, puis Phase 3 (bindings Python `pyquasar`, inférence de
+taux depuis séries temporelles).

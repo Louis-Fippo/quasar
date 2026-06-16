@@ -1,0 +1,17 @@
+# QUASAR ANX model — démonstration multivalué (MDD).
+# Le gène 'g' a 3 niveaux d'expression (0=éteint, 1=bas, 2=haut), régulé par 'r'.
+# Montre le backend symbolique MDD sur un réseau non booléen (|S(g)|=3).
+model "multivalued-demo"
+
+automaton g [0, 1, 2]
+automaton r [0, 1]
+
+g: 0 -> 1 when r=1 @ 2.0
+g: 1 -> 2 when r=1 @ 1.0
+g: 1 -> 0 when r=0 @ 1.0
+g: 2 -> 1 when r=0 @ 1.0
+
+r: 0 -> 1 @ 1.0
+r: 1 -> 0 @ 0.5
+
+init g=0, r=0
