@@ -134,6 +134,10 @@ Livré aussi : **`transform abstract` (CEGAR)** — atteignabilité par
 abstraction-raffinement (`analysis/Cegar`), encadrée par `OA(V)`/`UA(V)` sur un
 ensemble d'automates visibles raffiné jusqu'à décision.
 
+Livré aussi : **CEGAR quantitatif** (`analysis/QuantCegar`) — encadrement sound
+`[lo, hi]` de `P(R)` par trajectoires disjointes de premier passage (vers le but
+et vers les états morts), raffiné par budget et convergeant vers la valeur exacte.
+
 Reste à venir : réordonnancement dynamique des variables des diagrammes (taille
-des DD), CEGAR quantitatif (bornes sur `P(R)` par abstraction), puis Phase 3
-(bindings Python `pyquasar`, inférence de taux depuis séries temporelles).
+des DD), puis Phase 3 (bindings Python `pyquasar`, inférence de taux depuis séries
+temporelles).

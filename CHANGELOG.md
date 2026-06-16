@@ -188,3 +188,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 - **Validation** : contrôle croisé property-based `CEGAR = oracle explicite` et
   `visible ⊆ cône`. Démo : cellfate Apoptosis décidé avec 7/11 automates visibles.
 - **129 tests** au total.
+
+### CEGAR quantitatif (§7.4 / §6.7)
+
+- **analysis/QuantCegar** : encadrement **sound** de `P(R)` par un intervalle
+  `[lo, hi]` raffiné par budget. Recherche meilleur-d'abord sur la chaîne de saut
+  du cône, avec deux cibles absorbantes — le **but** et les **états morts** (but
+  OA-inatteignable). Les trajectoires de premier passage étant disjointes :
+  `lo = ∑P(traj→but) ≤ P(R)` et `hi = 1 − ∑P(traj→mort) ≥ P(R)`. `[lo, hi]`
+  converge vers `P(R)` (absorption p.s. dans but ∪ morts).
+- **cli** : `analyze probability --cegar [--budget N]` (encadrement `[lo,hi]`,
+  preuve de seuil si l'intervalle tranche).
+- **Validation** : property-based `lower ≤ P_exact ≤ upper` ; encadrements exacts
+  `[1/3,1/3]` (booléen) et `[1/4,1/4]` (multivalué). Démo : cellfate Apoptosis
+  `[0,5 ; 0,5]` exact ; multivalued-demo cyclique `[0,994 ; 1,0]`.
+- **133 tests** au total.

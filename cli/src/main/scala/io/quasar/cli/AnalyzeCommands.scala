@@ -2,7 +2,14 @@ package io.quasar.cli
 
 import cats.syntax.all.*
 import com.monovore.decline.*
-import io.quasar.analysis.{Intervention, Quantitative, Reachability, Scenarios, SymbolicMdd}
+import io.quasar.analysis.{
+  Intervention,
+  QuantCegar,
+  Quantitative,
+  Reachability,
+  Scenarios,
+  SymbolicMdd
+}
 import io.quasar.core.Verdict
 import io.quasar.core.ir.{AutomataNetwork, Context, LocalState}
 
@@ -143,12 +150,36 @@ object AnalyzeCommands:
     }
 
   // --- probability ---------------------------------------------------------
+  private val cegarOpt = Opts.flag("cegar", "encadrement quantitatif [lo,hi] (CEGAR)").orFalse
+  private val budgetOpt =
+    Opts.option[Int]("budget", "budget de trajectoires (CEGAR)").withDefault(256)
+
   private val probabilityCmd =
-    Opts.subcommand("probability", "P(R) (exacte CTMC/MDD ou borne inférieure)") {
-      (modelArg, goalOpt, fromOpt, threshOpt, symbolicOpt, jsonOpt).mapN {
-        (path, g, from, thr, symbolic, json) => () =>
+    Opts.subcommand("probability", "P(R) (exacte CTMC/MDD, encadrement CEGAR, ou borne)") {
+      (modelArg, goalOpt, fromOpt, threshOpt, symbolicOpt, cegarOpt, budgetOpt, jsonOpt).mapN {
+        (path, g, from, thr, symbolic, cegar, budget, json) => () =>
           load(path, g, from) match
             case Left(code) => code
+            case Right((net, ctx, goal)) if cegar =>
+              val br = QuantCegar.bracket(net, ctx, goal, budget)
+              if json then
+                Console.emitJson(
+                  Json.obj(
+                    "goal" -> Json.str(goal.toString),
+                    "method" -> Json.str("cegar-bracket"),
+                    "lower" -> Json.num(br.lower),
+                    "upper" -> Json.num(br.upper),
+                    "exact" -> Json.bool(br.exact()),
+                    "budget" -> Json.int(br.budget)
+                  )
+                )
+              else
+                val tag = if br.exact() then " (exact)" else f" (largeur ${br.width}%.4g)"
+                Console.out(f"P($goal) ∈ [${br.lower}%.6g, ${br.upper}%.6g]$tag")
+              thr match
+                case Some(t) if br.lower >= t => 0 // P ≥ t prouvé
+                case Some(t) if br.upper < t => 1 // P < t prouvé
+                case _ => 0
             case Right((net, ctx, goal)) =>
               // p : Either[erreur, (valeur, exact?)]
               val computed: Either[String, (Double, Boolean)] =
@@ -172,7 +203,7 @@ object AnalyzeCommands:
                         "goal" -> Json.str(goal.toString),
                         "probability" -> Json.num(p),
                         "exact" -> Json.bool(exact),
-                        "method" -> Json.str(if symbolic then "symbolic-mtbdd" else "ctmc"),
+                        "method" -> Json.str(if symbolic then "symbolic-mdd" else "ctmc"),
                         "threshold" -> Json.opt(thr.map(Json.num)),
                         "meetsThreshold" -> Json.opt(meets.map(Json.bool))
                       )
