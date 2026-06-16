@@ -2,7 +2,14 @@ package io.quasar.cli
 
 import cats.syntax.all.*
 import com.monovore.decline.*
-import io.quasar.analysis.{Intervention, Quantitative, Reachability, Scenarios, Symbolic}
+import io.quasar.analysis.{
+  Intervention,
+  Quantitative,
+  Reachability,
+  Scenarios,
+  Symbolic,
+  SymbolicCtmc
+}
 import io.quasar.core.Verdict
 import io.quasar.core.ir.{AutomataNetwork, Context, LocalState}
 
@@ -146,31 +153,48 @@ object AnalyzeCommands:
 
   // --- probability ---------------------------------------------------------
   private val probabilityCmd =
-    Opts.subcommand("probability", "borne inférieure de P(R)") {
-      (modelArg, goalOpt, fromOpt, threshOpt, jsonOpt).mapN { (path, g, from, thr, json) => () =>
-        load(path, g, from) match
-          case Left(code) => code
-          case Right((net, ctx, goal)) =>
-            val q = Quantitative.analyze(net, ctx, goal)
-            val p = q.probLowerBound.map(_.value).getOrElse(0.0)
-            val meets = thr.map(t => p >= t)
-            if json then
-              Console.emitJson(
-                Json.obj(
-                  "goal" -> Json.str(goal.toString),
-                  "probLowerBound" -> Json.num(p),
-                  "threshold" -> Json.opt(thr.map(Json.num)),
-                  "meetsThreshold" -> Json.opt(meets.map(Json.bool))
-                )
-              )
-            else
-              q.probLowerBound match
-                case Some(b) => Console.out(probLine(b))
-                case None => Console.out(f"P($goal) ≥ $p%.6g")
-              meets.foreach(m => Console.out(s"P(R) ≥ ${thr.get} : ${yesNo(m)}"))
-            meets match
-              case Some(false) => 1
-              case _ => 0
+    Opts.subcommand("probability", "P(R) (exacte CTMC/MTBDD ou borne inférieure)") {
+      (modelArg, goalOpt, fromOpt, threshOpt, symbolicOpt, jsonOpt).mapN {
+        (path, g, from, thr, symbolic, json) => () =>
+          load(path, g, from) match
+            case Left(code) => code
+            case Right((net, ctx, goal)) =>
+              // p : Either[erreur, (valeur, exact?)]
+              val computed: Either[String, (Double, Boolean)] =
+                if symbolic then
+                  SymbolicCtmc.reachProbability(net, ctx, goal).map(r => (r.reachProbability, true))
+                else
+                  val q = Quantitative.analyze(net, ctx, goal)
+                  Right(
+                    (
+                      q.probLowerBound.map(_.value).getOrElse(0.0),
+                      q.probLowerBound.exists(_.approx == io.quasar.core.Approx.Exact)
+                    )
+                  )
+              computed match
+                case Left(e) => Console.fail(e)
+                case Right((p, exact)) =>
+                  val meets = thr.map(t => p >= t)
+                  if json then
+                    Console.emitJson(
+                      Json.obj(
+                        "goal" -> Json.str(goal.toString),
+                        "probability" -> Json.num(p),
+                        "exact" -> Json.bool(exact),
+                        "method" -> Json.str(if symbolic then "symbolic-mtbdd" else "ctmc"),
+                        "threshold" -> Json.opt(thr.map(Json.num)),
+                        "meetsThreshold" -> Json.opt(meets.map(Json.bool))
+                      )
+                    )
+                  else
+                    val tag =
+                      if exact then if symbolic then "exact, MTBDD" else "exact, CTMC"
+                      else "borne inférieure"
+                    Console.out(f"P($goal) ${if exact then "=" else "≥"} $p%.6g  ($tag)")
+                    meets.foreach(mm => Console.out(s"P(R) ≥ ${thr.get} : ${yesNo(mm)}"))
+                  meets match
+                    case Some(false) => 1
+                    case _ => 0
       }
     }
 

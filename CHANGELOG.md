@@ -144,3 +144,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   StatusLogger log4j2 (jSBML) silencé.
 - **Tests** : 109 au total, dont round-trip ANX↔bioLQM (équivalence dynamique) et
   export SBML-qual.
+
+### `P(R)` symbolique par MTBDD (§6.4)
+
+- **core/dd/Mtbdd** : diagramme de décision multi-terminal auto-contenu (terminaux
+  réels) — `apply` (+, ×, −, ÷, max) mémoïsé, restriction, somme d'abstraction,
+  `relabel` monotone, évaluation, `maxAbsLeaf`.
+- **analysis/SymbolicCtmc** : calcul **exact** de `P(R)` par **itération de valeur
+  symbolique** — matrice de taux `T(x,x')`, taux de sortie `R(x)=∑T`, matrice de saut
+  `P=T/R`, puis `h = but + (1−but)·(P·h)` jusqu'au point fixe ; produit
+  matrice-vecteur = `apply(×)` + somme d'abstraction sur les variables suivantes.
+  Sans énumération d'états (réseaux booléens à transitions exponentielles).
+- **cli** : `analyze probability --symbolic` (P(R) exacte MTBDD, avec `--threshold`).
+- **Validation** : contrôle croisé property-based `P(R) MTBDD = P(R) CTMC explicite`
+  sur réseaux booléens aléatoires ; course booléenne = `1/3` exact.
+- **Tests** : 117 au total.
