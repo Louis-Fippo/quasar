@@ -138,6 +138,10 @@ Livré aussi : **CEGAR quantitatif** (`analysis/QuantCegar`) — encadrement sou
 `[lo, hi]` de `P(R)` par trajectoires disjointes de premier passage (vers le but
 et vers les états morts), raffiné par budget et convergeant vers la valeur exacte.
 
+Livré aussi : **bindings Python `pyquasar`** (Phase 3) — façade JVM
+`io.quasar.py.Quasar` (JSON) appelée depuis Python via jpype, pour les notebooks
+CoLoMoTo.
+
 Reste à venir : réordonnancement dynamique des variables des diagrammes (taille
-des DD), puis Phase 3 (bindings Python `pyquasar`, inférence de taux depuis séries
-temporelles).
+des DD), passerelle py4j alternative, et l'inférence de taux depuis séries
+temporelles (pont BoNesis, §7.8).

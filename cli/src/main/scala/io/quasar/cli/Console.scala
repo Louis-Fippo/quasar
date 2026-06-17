@@ -1,6 +1,6 @@
 package io.quasar.cli
 
-import io.quasar.io.{Importer, IoError}
+import io.quasar.io.Importer
 import io.quasar.core.ir.AutomataNetwork
 
 /** Sortie console + chargement de modèle partagés par les commandes. */
@@ -24,20 +24,19 @@ object Console:
     p.endsWith(".sbml") || p.endsWith(".xml") || p.endsWith(".ginml") ||
     p.endsWith(".zginml") || p.endsWith(".booleannet") || p.endsWith(".bnet")
 
-  /** Charge un modèle ANX depuis un fichier, ou échoue proprement. */
-  def loadModel(path: String, format: Option[String] = None): Either[Int, AutomataNetwork] =
+  /** Charge un modèle ANX (routage bioLQM/io), erreur sous forme de message. */
+  def load(path: String, format: Option[String] = None): Either[String, AutomataNetwork] =
     val viaBiolqm =
       format.exists(f => biolqmFormats.contains(f.toLowerCase)) ||
         (format.isEmpty && biolqmHandlesExt(path))
-    if viaBiolqm then
-      io.quasar.biolqm.BioLqm.importFile(path) match
-        case Right(net) => Right(net)
-        case Left(e) => Left(fail(s"import de '$path' : $e"))
-    else
-      val fmt = format.flatMap(io.quasar.io.Format.parse)
-      Importer.fromFile(path, fmt) match
-        case Right(net) => Right(net)
-        case Left(e) => Left(fail(s"import de '$path' : $e"))
+    val res =
+      if viaBiolqm then io.quasar.biolqm.BioLqm.importFile(path)
+      else Importer.fromFile(path, format.flatMap(io.quasar.io.Format.parse)).left.map(_.toString)
+    res.left.map(e => s"import de '$path' : $e")
+
+  /** Charge un modèle ANX depuis un fichier, ou échoue proprement (sortie CLI). */
+  def loadModel(path: String, format: Option[String] = None): Either[Int, AutomataNetwork] =
+    load(path, format).left.map(fail)
 
   def emitJson(j: Json.J): Int =
     out(Json.render(j))

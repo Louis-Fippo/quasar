@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyquasar"
+version = "0.1.0"
+description = "Bindings Python pour QUASAR (analyse statique de réseaux d'automates biologiques)"
+requires-python = ">=3.9"
+dependencies = ["jpype1>=1.5"]
+
+[project.urls]
+Repository = "https://github.com/Louis-Fippo/quasar"
+
+[tool.setuptools]
+packages = ["pyquasar"]

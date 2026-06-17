@@ -69,6 +69,7 @@ Toutes les commandes acceptent `--json` pour une sortie machine stable.
 | `verify`   | adaptateurs sous-processus NuSMV / Storm / MaBoSS |
 | `cli`      | binaire `quasar` (decline) + TUI (jline) + dépôt de modèles |
 | `bench`    | modèles de référence (p53-mdm2, …) |
+| `pyquasar` | bindings Python (jpype) pour notebooks — façade `io.quasar.py.Quasar` |
 
 ## Surface CLI
 

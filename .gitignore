@@ -12,3 +12,9 @@ project/project/
 *.swp
 *.swo
 .claude/
+
+# Python (pyquasar)
+__pycache__/
+*.egg-info/
+.pytest_cache/
+*.pyc

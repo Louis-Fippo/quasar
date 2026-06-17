@@ -203,3 +203,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   `[1/3,1/3]` (booléen) et `[1/4,1/4]` (multivalué). Démo : cellfate Apoptosis
   `[0,5 ; 0,5]` exact ; multivalued-demo cyclique `[0,994 ; 1,0]`.
 - **133 tests** au total.
+
+### Phase 3 — bindings Python `pyquasar`
+
+- **cli (`io.quasar.py.Quasar`)** : façade JVM sans état renvoyant du JSON
+  (info, reachability, reachabilitySymbolic, quantitative, bracket, fixpoints,
+  exportModel) — bundlée dans `quasar.jar`.
+- **`pyquasar/`** : package Python chargeant le fat-jar via **jpype** (JVM en
+  processus) ; auto-détection du jar (`$QUASAR_JAR`), méthodes renvoyant des
+  dictionnaires. Pensé pour les notebooks CoLoMoTo.
+- **Tests** : 7 tests JVM de la façade (munit) + 6 tests Python (jpype, ignorés
+  si jpype/jar absents) ; **140 tests JVM** au total.
+- `Console.load` factorisé (chargement pur, erreur en message) ; réutilisé par la
+  façade et la CLI.
