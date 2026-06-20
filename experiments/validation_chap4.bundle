@@ -1,0 +1,47 @@
+# QUASAR run-bundle
+# id: cellfate-validation
+# tags: chap4,validation
+
+# QUASAR ANX model
+
+automaton Apoptosis [0, 1]
+automaton Caspase3 [0, 1]
+automaton Caspase8 [0, 1]
+automaton FADD [0, 1]
+automaton MPT [0, 1]
+automaton NFkB [0, 1]
+automaton Necrosis [0, 1]
+automaton RIP1 [0, 1]
+automaton ROS [0, 1]
+automaton Survival [0, 1]
+automaton TNF [0, 1]
+
+Apoptosis: 0 -> 1 when Caspase3=1 @ 1.0
+Apoptosis: 1 -> 0 when Caspase3=0 @ 1.0
+Caspase3: 0 -> 1 when Caspase8=1 and NFkB=0 @ 1.0
+Caspase3: 1 -> 0 when Caspase8=0 @ 1.0
+Caspase3: 1 -> 0 when NFkB=1 @ 1.0
+Caspase8: 0 -> 1 when FADD=1 and NFkB=0 @ 1.0
+Caspase8: 1 -> 0 when FADD=0 @ 1.0
+Caspase8: 1 -> 0 when NFkB=1 @ 1.0
+FADD: 0 -> 1 when TNF=1 @ 1.0
+FADD: 1 -> 0 when TNF=0 @ 1.0
+MPT: 0 -> 1 when ROS=1 @ 1.0
+MPT: 1 -> 0 when ROS=0 @ 1.0
+NFkB: 0 -> 1 when Caspase8=0 and RIP1=1 @ 1.0
+NFkB: 1 -> 0 when RIP1=0 @ 1.0
+NFkB: 1 -> 0 when Caspase8=1 @ 1.0
+Necrosis: 0 -> 1 when MPT=1 @ 1.0
+Necrosis: 1 -> 0 when MPT=0 @ 1.0
+RIP1: 0 -> 1 when Caspase8=0 and TNF=1 @ 1.0
+RIP1: 1 -> 0 when TNF=0 @ 1.0
+RIP1: 1 -> 0 when Caspase8=1 @ 1.0
+ROS: 0 -> 1 when NFkB=0 and RIP1=1 @ 1.0
+ROS: 1 -> 0 when RIP1=0 @ 1.0
+ROS: 1 -> 0 when NFkB=1 @ 1.0
+Survival: 0 -> 1 when NFkB=1 @ 1.0
+Survival: 1 -> 0 when NFkB=0 @ 1.0
+TNF: 0 -> 1 when TNF=1 @ 1.0
+TNF: 1 -> 0 when TNF=0 @ 1.0
+
+init Apoptosis=0, Caspase3=0, Caspase8=0, FADD=0, MPT=0, NFkB=0, Necrosis=0, RIP1=0, ROS=0, Survival=0, TNF=1

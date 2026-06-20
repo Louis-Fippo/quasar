@@ -18,3 +18,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 *.pyc
+
+# Dépôt de modèles QUASAR (état local)
+.quasar-repo/
+
+# Intermédiaires générés par le notebook d'expériences
+experiments/cellfate.anx
+experiments/figures/
