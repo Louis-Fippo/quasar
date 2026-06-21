@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Balayage de scalabilité (fiche A2) — automatise la courbe H5
+
+- **cli** : `bench sweep [model…] [--dir D] [--metric reachability|fixpoints|load]
+  [--reps R] [--json]` mesure, par modèle, sa **taille** (#automates, |S|,
+  transitions) et le **temps** d'une métrique *sans objectif* (états atteignables
+  symboliques par défaut, ou points fixes, ou chargement). Résultats triés par
+  taille. JSON `{metric, results:[{model, automata, …, value, timeMs}]}` —
+  données directes de la courbe H5.
+- **Tests** : sémantique des métriques (états atteignables indépendants de
+  l'objectif ; nombre de points fixes absorbants).
+
 ### Ablation des stratégies P(R) (fiche A3) — débloque H6
 
 - **cli** : `bench ablation <m> --goal a=j [--from] [--budget N] [--reps R] [--json]`
