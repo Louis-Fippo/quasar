@@ -22,7 +22,7 @@ object TopologyCommands:
         case Left(c) => c
         case Right(net) =>
           val comps = Topology.scc(net)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(Json.arr(comps.map(c => Json.arr(c.toList.sorted.map(Json.str)))))
           else if comps.isEmpty then Console.out("aucune SCC non triviale")
           else
@@ -44,7 +44,7 @@ object TopologyCommands:
               case "negative" => Some(Sign.Negative)
               case _ => None
             val cs = Topology.circuits(net, filter)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.arr(
                   cs.map(c =>
@@ -69,7 +69,7 @@ object TopologyCommands:
           val cs = Topology.circuits(net)
           val pos = cs.count(_.sign == Sign.Positive)
           val neg = cs.count(_.sign == Sign.Negative)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "total" -> Json.int(cs.size),
@@ -90,7 +90,7 @@ object TopologyCommands:
         case Left(c) => c
         case Right(net) =>
           val r = Topology.fixpoints(net)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "truncated" -> Json.bool(r.truncated),
@@ -112,7 +112,7 @@ object TopologyCommands:
           case Left(c) => c
           case Right(net) =>
             val r = Topology.attractors(net)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.obj(
                   "truncated" -> Json.bool(r.truncated),
@@ -141,7 +141,7 @@ object TopologyCommands:
           case Right(net) =>
             val r = Topology.trapSpaces(net, minimalOnly = min)
             def show(m: Map[String, Int]) = if m.isEmpty then "(espace complet)" else fmtState(m)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.obj(
                   "truncated" -> Json.bool(r.truncated),

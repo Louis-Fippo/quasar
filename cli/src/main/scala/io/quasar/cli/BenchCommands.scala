@@ -112,7 +112,7 @@ object BenchCommands:
             case Left(c) => c
             case Right((net, goal)) =>
               val rep = buildReport(net, path, goal)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.obj(
                     "model" -> Json.str(path),
@@ -224,7 +224,7 @@ object BenchCommands:
               (for r <- ref; x <- v yield math.abs(x - r) <= 1e-6).getOrElse(false)
             val cegarAgree = ref.exists(r => br.lower - 1e-9 <= r && r <= br.upper + 1e-9)
 
-            if json then
+            if Console.jsonEnabled(json) then
               val strat = List(
                 Json.obj(
                   "strategy" -> Json.str("ctmc-exact"),
@@ -385,7 +385,7 @@ object BenchCommands:
             }
             .sortBy(_._2.getOrElse(Int.MaxValue))
 
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "metric" -> Json.str(metric),

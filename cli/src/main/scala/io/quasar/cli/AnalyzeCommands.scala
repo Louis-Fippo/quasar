@@ -55,7 +55,7 @@ object AnalyzeCommands:
             case Left(code) => code
             case Right((net, ctx, goal)) if symbolic =>
               val res = SymbolicMdd.reachability(net, ctx, goal)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.obj(
                     "goal" -> Json.str(goal.toString),
@@ -73,7 +73,7 @@ object AnalyzeCommands:
               if res.goalReachable then 0 else 1
             case Right((net, ctx, goal)) =>
               val r = Reachability.analyze(net, ctx, goal)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.obj(
                     "goal" -> Json.str(goal.toString),
@@ -119,7 +119,7 @@ object AnalyzeCommands:
               val q = Quantitative.analyze(net, ctx, goal, maxStates)
               val showP = metric != "delay"
               val showD = metric != "prob"
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.obj(
                     "goal" -> Json.str(goal.toString),
@@ -162,7 +162,7 @@ object AnalyzeCommands:
             case Left(code) => code
             case Right((net, ctx, goal)) if cegar =>
               val br = QuantCegar.bracket(net, ctx, goal, budget)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.obj(
                     "goal" -> Json.str(goal.toString),
@@ -197,7 +197,7 @@ object AnalyzeCommands:
                 case Left(e) => Console.fail(e)
                 case Right((p, exact)) =>
                   val meets = thr.map(t => p >= t)
-                  if json then
+                  if Console.jsonEnabled(json) then
                     Console.emitJson(
                       Json.obj(
                         "goal" -> Json.str(goal.toString),
@@ -228,7 +228,7 @@ object AnalyzeCommands:
           case Left(code) => code
           case Right((net, ctx, goal)) =>
             val d = Quantitative.earliestDelay(net, ctx, goal)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.obj(
                   "goal" -> Json.str(goal.toString),
@@ -258,7 +258,7 @@ object AnalyzeCommands:
               val kind =
                 if kindS == "fastest" then Scenarios.Kind.Fastest else Scenarios.Kind.MostProbable
               val scs = Scenarios.topK(net, ctx, goal, k, kind)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.arr(
                     scs.map(sc =>
@@ -296,7 +296,7 @@ object AnalyzeCommands:
             case Left(code) => code
             case Right((net, ctx, goal)) =>
               val cs = Intervention.cutsets(net, ctx, goal, maxSize)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.arr(
                     cs.map(s =>
@@ -322,7 +322,7 @@ object AnalyzeCommands:
             case Right((net, ctx, goal)) =>
               val enable = effect != "disable"
               val ms = Intervention.mutations(net, ctx, goal, enable)
-              if json then
+              if Console.jsonEnabled(json) then
                 Console.emitJson(
                   Json.arr(
                     ms.map(m =>
@@ -353,7 +353,7 @@ object AnalyzeCommands:
             // l'UA (recherche exacte dans le cône) sert d'oracle d'atteignabilité
             val exact = r.uaReachable
             val sound = !(r.uaReachable && !exact) && !(exact && !r.oaReachable)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.obj(
                   "goal" -> Json.str(goal.toString),

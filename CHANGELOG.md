@@ -5,6 +5,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Options globales `--json` / `--cache-dir` (fiche M1)
+
+- **cli** : `--json` et `--cache-dir <dir>` reconnus en **tête** de ligne de
+  commande (avant la sous-commande), en complément des `--json` par-commande.
+  Variables d'environnement équivalentes : `QUASAR_JSON`, `QUASAR_CACHE_DIR`.
+- **Console.jsonEnabled** : JSON effectif = flag local OU global. **Console.cachedRun**
+  : mémoïsation persistante (clé = sous-commande + flags + **hash du contenu** des
+  modèles), appliquée au seul groupe **`analyze`** (lecture seule, aucun effet de
+  bord mémoïsé) — rejoue la sortie sans recalcul.
+- **Tests** : `jsonEnabled` (local/global), `cachedRun` (hit sans recalcul, no-op
+  si cache absent).
+
 ### Rapport de validation consolidé (fiche M2)
 
 - **analysis/ValidationMetrics** (pur, testé) : `Bounds(binf, exact)` →

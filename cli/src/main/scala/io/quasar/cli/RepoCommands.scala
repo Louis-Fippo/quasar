@@ -38,7 +38,7 @@ object RepoCommands:
         if !store.exists then Console.fail("dépôt non initialisé (quasar repo init)")
         else
           val es = store.list(tag)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.arr(
                 es.map(e =>
