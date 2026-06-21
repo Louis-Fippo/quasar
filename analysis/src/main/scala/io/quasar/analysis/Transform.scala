@@ -2,10 +2,59 @@ package io.quasar.analysis
 
 import io.quasar.core.ir.*
 
+import scala.util.Random
+
 /**
  * Transformations de modèle (§7.4) préservant les propriétés utiles.
  */
 object Transform:
+
+  /**
+   * Politique d'assignation de taux pour la valuation des modèles qualitatifs (voie 7.7b, fiche
+   * P1). Les modèles importés sans cinétique (SBML-qual, BoolNet, GINML…) reçoivent des taux par
+   * défaut peu informatifs ; cette politique les (re)fixe explicitement.
+   */
+  enum RatePolicy:
+    /** Taux unitaire : toutes les transitions à `Exponential(1.0)`. */
+    case Unit
+
+    /**
+     * Échantillonnage log-uniforme dans `[lo, hi]` (taux > 0), déterministe pour une graine donnée
+     * — utile pour l'analyse de sensibilité.
+     */
+    case Sample(lo: Double, hi: Double)
+
+  /**
+   * Assigne une distribution **exponentielle** à chaque transition selon `policy` (fiche P1). Les
+   * taux produits sont strictement positifs (cohérents avec [[Validation]]). Le parcours suit un
+   * ordre déterministe (automates triés par nom, puis ordre de déclaration des transitions), de
+   * sorte que `Sample` soit reproductible pour une `seed` donnée. La structure du réseau
+   * (automates, niveaux, préconditions) est inchangée ; seules les distributions sont remplacées.
+   */
+  def assignRates(net: AutomataNetwork, policy: RatePolicy, seed: Long = 0L): AutomataNetwork =
+    policy match
+      case RatePolicy.Unit =>
+        mapDistributionsOrdered(net)(_ => Distribution.Exponential(1.0))
+      case RatePolicy.Sample(lo, hi) =>
+        require(
+          lo > 0.0 && hi >= lo,
+          s"intervalle de taux invalide : [$lo, $hi] (attendu 0 < lo ≤ hi)"
+        )
+        val rng = new Random(seed)
+        val logLo = math.log(lo)
+        val span = math.log(hi) - logLo
+        mapDistributionsOrdered(net) { _ =>
+          Distribution.Exponential(math.exp(logLo + rng.nextDouble() * span))
+        }
+
+  /** Remplace la distribution de chaque transition, dans un ordre déterministe. */
+  private def mapDistributionsOrdered(
+      net: AutomataNetwork
+  )(f: Transition => Distribution): AutomataNetwork =
+    val updated = net.ordered.map { au =>
+      au.name -> au.copy(transitions = au.transitions.map(t => t.copy(dist = f(t))))
+    }.toMap
+    net.copy(automata = updated)
 
   /**
    * Réduction orientée-but : restreint le réseau au **cône d'influence** du but (l'automate cible
