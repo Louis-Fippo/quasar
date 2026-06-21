@@ -54,7 +54,7 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 | **H2 — justesse (délai)** | ✅ PRÊT (fiche V1 livrée) — T(R) vs quantiles de temps d'atteinte MaBoSS ; exécuté si MaBoSS présent, sinon SKIPPED |
 | **H3 — finesse** | ✅ VALIDÉ — écart nul (P(R) calculée exactement sur ces modèles) |
 | **H4 — scénarios** | ✅ PRÊT (fiche V1 livrée) — recouvrement Jaccard scénario QUASAR ↔ nœuds activés MaBoSS ; SKIPPED si MaBoSS absent |
-| **H5 — scalabilité** | ⚠️ PARTIEL — modèles disponibles seulement (grands modèles non acquis) |
+| **H5 — scalabilité** | ⚠️ PARTIEL — grands modèles non acquis ; Storm exact (V2) mesuré si présent (point d'explosion) |
 | **H6 — optimisations** | ⚠️ PARTIEL — convergence anytime VALIDÉE ; ablation semi-anneau/ZDD BLOQUÉE (A2/A3) |
 
 ## Modules QUASAR à arbitrer (Section 7 du notebook)
@@ -67,7 +67,7 @@ L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/
 | **P0** | `pyquasar` (façade Python) — **livré** ; on garde le pilotage CLI par défaut | — |
 | **P1** | `quasar model assign-rates <m> --policy unit\|sample --seed N` — **livré ✅** | valuation des modèles qualitatifs (T helper / TCR / N2a) |
 | **V1** | `quasar verify maboss … --samples N --max-time T --json` — **livré ✅** (quantiles + nodeActivation) | H2, H4 |
-| **V2** | `quasar verify storm … --metric prob\|expected-time --json` | oracle exact externe scriptable |
+| **V2** | `quasar verify storm … --metric prob\|expected-time --json` — **livré ✅** | oracle exact scriptable, point d'explosion H5 |
 | **A1** | recouvrement H4 fait au niveau notebook via V1 (Jaccard) — **résolu** | H4 (recouvrement) |
 | **A2** | `quasar bench sweep --models … --metric time --json` | courbe H5 automatisée |
 | **A3** | options solveur `--semiring\|--anytime\|--cycle-policy` + `quasar bench ablation` | H6a / H6c |

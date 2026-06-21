@@ -437,21 +437,39 @@ def maboss_hitting(name, goal):
                     "--samples", str(N_SAMPLES), "--max-time", str(MAX_TIME)], use_cache=False)
     return None if (r["_unavailable"] or not r["_ok"]) else r.get("data")
 
+# Storm exact (fiche V2) : proba exacte + temps d'atteinte espéré, via --json.
+STORM = {}
+def storm_exact(name, goal):
+    if not ORACLES["storm"]:
+        return None
+    anx = MODELS[name]["anx"]
+    p = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "prob"],
+                   use_cache=False)
+    t = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "expected-time"],
+                   use_cache=False)
+    if p["_unavailable"]:
+        return None
+    return {"prob": (p.get("data") or {}).get("prob"),
+            "expectedTime": (t.get("data") or {}).get("expectedTime")}
+
 ext_oracle = []
 for name, goal, frm in GOALS:
-    row = {"modèle": name, "objectif": goal, "MaBoSS P(R)": None, "Storm P(R)": None}
+    row = {"modèle": name, "objectif": goal, "MaBoSS P(R)": None,
+           "Storm P(R)": None, "Storm E[temps]": None}
     h = maboss_hitting(name, goal)
     if h is not None:
         MABOSS_HITTING[(name, goal)] = h
         row["MaBoSS P(R)"] = h.get("prob")
     else:
         row["MaBoSS P(R)"] = "SKIPPED (absent)" if not ORACLES["maboss"] else "n/a (.bnd absent)"
-    if ORACLES["storm"]:
-        anx = MODELS[name]["anx"]
-        r = run_quasar(["verify", "storm", str(anx), "--goal", goal], want_json=False)
-        row["Storm P(R)"] = "SKIPPED" if r["_unavailable"] else _parse_prob(r["_raw"])
+    s = storm_exact(name, goal)
+    if s is not None:
+        STORM[(name, goal)] = s
+        row["Storm P(R)"] = s["prob"]
+        row["Storm E[temps]"] = s["expectedTime"]
     else:
         row["Storm P(R)"] = "SKIPPED (absent)"
+        row["Storm E[temps]"] = "SKIPPED (absent)"
     ext_oracle.append(row)
 
 EXT_ORACLE = pd.DataFrame(ext_oracle)
@@ -485,19 +503,19 @@ for name, goal, frm in GOALS:
     # H1b — binf ne dépasse pas l'exact symbolique (MDD)
     if b is not None and s is not None and b > s + EPS:
         violations.append((name, goal, "binf > exact_MDD", (b, s)))
-    # H1c — oracles externes si présents
+    # H1c — oracle exact externe Storm (V2, JSON) si présent
     if ORACLES["storm"]:
-        r = run_quasar(["verify", "storm", str(anx), "--goal", goal], want_json=False)
-        if not r["_unavailable"]:
-            p = _parse_prob(r["_raw"])
-            if p is not None and b is not None and b > p + 1e-6:
-                violations.append((name, goal, "binf > P_Storm", (b, p)))
+        p = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "prob"],
+                       use_cache=False)
+        ps = (p.get("data") or {}).get("prob")
+        if ps is not None and b is not None and b > ps + 1e-6:
+            violations.append((name, goal, "binf > P_Storm", (b, ps)))
+    # H1d — oracle empirique MaBoSS (V1, JSON) si présent
     if ORACLES["maboss"]:
-        r = run_quasar(["verify", "maboss", str(anx), "--goal", goal], want_json=False)
-        if not r["_unavailable"]:
-            p = _parse_prob(r["_raw"])
-            if p is not None and b is not None and b > p + 0.05:  # marge stochastique
-                violations.append((name, goal, "binf > P_MaBoSS", (b, p)))
+        h = maboss_hitting(name, goal)
+        pm = h.get("prob") if h else None
+        if pm is not None and b is not None and b > pm + 0.05:  # marge stochastique
+            violations.append((name, goal, "binf > P_MaBoSS", (b, pm)))
 
 print("Violations détectées :", violations)
 assert not violations, f"❌ H1 VIOLÉE — bornes NON SÛRES : {violations}"
@@ -585,19 +603,26 @@ md(r"""
 
 code(r"""
 # ===================== H5 — SCALABILITÉ ===================================
-# Temps QUASAR vs taille, sur les modèles disponibles. Oracles superposés si présents.
+# Temps QUASAR vs taille ; temps Storm exact (V2) superposé si présent —
+# le point où Storm dépasse le TIMEOUT marque son explosion.
 scal_rows = []
 for name, goal, frm in GOALS:
     anx = MODELS[name]["anx"]
     nbaut = int(SUMMARY.loc[SUMMARY["modèle"] == name, "automates"].iloc[0])
-    r = run_quasar(["analyze", "probability", str(anx), "--goal", goal] + _extra(frm),
-                   use_cache=False)  # temps frais
+    rq = run_quasar(["analyze", "probability", str(anx), "--goal", goal] + _extra(frm),
+                    use_cache=False)
+    t_storm = None
+    if ORACLES["storm"]:
+        rs = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "prob"],
+                        use_cache=False)
+        t_storm = "TIMEOUT" if rs.get("_timeout") else round(rs["_elapsed"], 3)
     scal_rows.append({"modèle": name, "objectif": goal, "automates": nbaut,
-                      "t_QUASAR (s)": round(r["_elapsed"], 3)})
+                      "t_QUASAR (s)": round(rq["_elapsed"], 3), "t_Storm (s)": t_storm})
 SCALABILITY = pd.DataFrame(scal_rows).sort_values("automates")
-print("⚠️ PARTIEL — les grands modèles du plan (Naldi ~40, Abou-Jaoudé 101, TCR)")
-print("   ne sont pas acquis/valués ici (Section 1/2) : la courbe s'arrête aux")
-print("   modèles disponibles. Le point où Storm explose nécessite Storm installé.")
+if not ORACLES["storm"]:
+    print("⚠️ Storm absent → colonne t_Storm vide (point d'explosion non mesurable ici).")
+print("⚠️ PARTIEL — grands modèles (Naldi ~40, Abou-Jaoudé 101, TCR) non acquis :")
+print("   la courbe s'arrête aux modèles disponibles.")
 SCALABILITY
 """)
 
@@ -652,7 +677,8 @@ PROPOSALS = [
      "bloque": "RÉSOLU ✅ — débloque H2 (quantiles) et H4 (nodeActivation)"},
     {"id": "V2", "besoin": "P exact + temps espéré Storm (+ JSON)", "module": "verify",
      "signature": "quasar verify storm <m> --goal ... --metric prob|expected-time --json",
-     "io": "{prob, expected_time}", "bloque": "Oracle exact externe scriptable, H5"},
+     "io": "{tool, goal, metric, prob, expectedTime}",
+     "bloque": "RÉSOLU ✅ — oracle exact scriptable, point d'explosion H5"},
     {"id": "A1", "besoin": "Comparaison scénario ↔ oracle (H4)", "module": "analysis/notebook",
      "signature": "recouvrement Jaccard (scénario QUASAR ↔ nodeActivation V1)",
      "io": "{overlap}", "bloque": "RÉSOLU au niveau notebook via V1 (Section 5)"},
@@ -775,13 +801,21 @@ def _draw3():
     # nuage de points (plusieurs objectifs partagent une même taille) — pas de
     # ligne trompeuse ; sur ces petits modèles le temps est dominé par le
     # démarrage JVM (~0.5 s), d'où l'absence de tendance d'échelle exploitable.
-    ax.scatter(df3["automates"], df3["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3)
+    ax.scatter(df3["automates"], df3["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3,
+               label="QUASAR")
     for _, r in df3.iterrows():
         ax.annotate(r["modèle"], (r["automates"], r["t_QUASAR (s)"]),
                     textcoords="offset points", xytext=(6, 3), fontsize=7)
-    ax.set_xlabel("# automates"); ax.set_ylabel("temps QUASAR (s)")
+    # Storm exact (V2) superposé si des temps numériques sont disponibles.
+    if "t_Storm (s)" in df3.columns:
+        st = df3[df3["t_Storm (s)"].apply(lambda v: isinstance(v, (int, float)))]
+        if len(st):
+            ax.scatter(st["automates"], st["t_Storm (s)"], c="tab:red", marker="^",
+                       s=60, zorder=3, label="Storm (exact)")
+            ax.legend(fontsize=8)
+    ax.set_xlabel("# automates"); ax.set_ylabel("temps (s)")
     ax.set_ylim(0, max(0.1, float(df3["t_QUASAR (s)"].max()) * 1.3))
-    ax.set_title("H5 — temps QUASAR vs taille (dominé par le démarrage JVM)")
+    ax.set_title("H5 — temps vs taille (petits modèles : dominé par le démarrage JVM)")
     fig.tight_layout(); fig.savefig(FIG / "fig3_scalabilite.png", dpi=130)
 
 _p = FIG / "fig3_scalabilite.png"
@@ -815,7 +849,9 @@ if render_figure(_draw4, _p):
 code(r"""
 # ---- Tableau de synthèse H1–H6 ----
 def _status_h5():
-    return "PARTIEL — modèles disponibles seulement (grands modèles non acquis)"
+    base = "PARTIEL — grands modèles non acquis"
+    return base + (" ; Storm exact (V2) mesuré" if ORACLES["storm"]
+                   else " ; Storm (V2) prêt, SKIPPED (absent)")
 
 SYNTHESE = pd.DataFrame([
     {"hypothèse": "H1 — justesse (proba)",   "statut": "VALIDÉ (oracle interne + MDD)" + ("" if (ORACLES["storm"] or ORACLES["maboss"]) else " ; externes SKIPPED")},
