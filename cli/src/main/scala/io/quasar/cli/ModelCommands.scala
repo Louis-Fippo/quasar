@@ -97,7 +97,7 @@ object ModelCommands:
         case Right(net) =>
           val diags = Validation.validate(net)
           val errors = diags.count(_.severity == Severity.Error)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "valid" -> Json.bool(errors == 0),
@@ -126,7 +126,7 @@ object ModelCommands:
         case Left(code) => code
         case Right(net) =>
           val multivalued = net.automata.values.count(_.levels > 2)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "name" -> Json.str(net.name),
@@ -178,7 +178,7 @@ object ModelCommands:
         case Left(code) => code
         case Right(net) =>
           val s = ModelStats.stats(net)
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "automata" -> Json.int(s.automata),
@@ -212,7 +212,7 @@ object ModelCommands:
           case Left(code) => code
           case Right((n1, n2)) =>
             val d = ModelStats.diff(n1, n2)
-            if json then
+            if Console.jsonEnabled(json) then
               Console.emitJson(
                 Json.obj(
                   "onlyInLeft" -> Json.arr(d.onlyInLeft.toList.sorted.map(Json.str)),
@@ -283,7 +283,7 @@ object ModelCommands:
                   written match
                     case Left(e) => Console.fail(e)
                     case Right(_) =>
-                      if json then
+                      if Console.jsonEnabled(json) then
                         Console.emitJson(
                           Json.obj(
                             "assigned" -> Json.int(result.transitions.size),
@@ -313,7 +313,7 @@ object ModelCommands:
         case Right(net) =>
           val loss = io.quasar.biolqm.BioLqm.projectionLoss(net)
           val ok = io.quasar.biolqm.BioLqm.toLogicalModel(net).isRight
-          if json then
+          if Console.jsonEnabled(json) then
             Console.emitJson(
               Json.obj(
                 "projectable" -> Json.bool(ok),

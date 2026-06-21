@@ -59,7 +59,7 @@ object VerifyCommands:
               case Right(r) =>
                 val prob = if kind == "prob" then r.probability else None
                 val time = if kind == "expected-time" then r.probability else None
-                if json then
+                if Console.jsonEnabled(json) then
                   Console.emitJson(
                     Json.obj(
                       "tool" -> Json.str("storm"),
@@ -101,7 +101,8 @@ object VerifyCommands:
                 case Left(e) => Console.fail(e)
                 case Right(h) =>
                   val sound = binf <= h.prob + 1e-9
-                  if json then emitHittingJson(g, binf, sound, samples, maxTime, h)
+                  if Console.jsonEnabled(json) then
+                    emitHittingJson(g, binf, sound, samples, maxTime, h)
                   else printHitting(g, binf, sound, h)
                   if sound then 0 else 1
     }

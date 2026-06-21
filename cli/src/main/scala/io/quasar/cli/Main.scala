@@ -35,13 +35,35 @@ object Main:
       header = "QUASAR — QUantitative And Static Analysis of Regulatory networks"
     )(groups.orElse(version))
 
+  /**
+   * Consomme les options globales (§7.0, fiche M1) en **tête** d'argv — `--json` et `--cache-dir
+   * <dir>` (ou `--cache-dir=<dir>`) — en positionnant les propriétés système lues par [[Console]],
+   * puis renvoie le reste des arguments (la sous-commande). Les `--json` par-commande restent gérés
+   * localement.
+   */
+  private def consumeGlobals(args: List[String]): List[String] = args match
+    case "--json" :: t =>
+      System.setProperty("quasar.json", "true"); consumeGlobals(t)
+    case "--cache-dir" :: d :: t =>
+      System.setProperty("quasar.cacheDir", d); consumeGlobals(t)
+    case opt :: t if opt.startsWith("--cache-dir=") =>
+      System.setProperty("quasar.cacheDir", opt.drop("--cache-dir=".length)); consumeGlobals(t)
+    case _ => args
+
   /** Parse et exécute des arguments sans terminer la JVM (réutilisé par la TUI). */
-  def execute(args: Seq[String]): Int =
+  def execute(rawArgs: Seq[String]): Int =
+    val args = consumeGlobals(rawArgs.toList)
     command.parse(args, sys.env) match
       case Left(help) =>
         System.err.println(help)
         if help.errors.isEmpty then 0 else 1
-      case Right(run) => run()
+      case Right(run) =>
+        // Mémoïsation persistante réservée au groupe `analyze` (lecture seule).
+        if args.headOption.contains("analyze") then
+          val key =
+            args.map(Console.fileTag) :+ s"json=${Console.jsonEnabled(args.contains("--json"))}"
+          Console.cachedRun(key)(run())
+        else run()
 
   def main(args: Array[String]): Unit =
     // silence le StatusLogger de log4j2 (jSBML via bioLQM n'a pas de backend de log)
