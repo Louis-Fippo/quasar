@@ -59,8 +59,8 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 
 ## Modules QUASAR à arbitrer (Section 7 du notebook)
 
-L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/P1
-(livrées), elles sont décrites pour décision :
+L'expérience a révélé des capacités requises absentes de la CLI ; **toutes ont
+été implémentées** (P0 → M2). Historique et statut :
 
 | Id | Proposition | Débloque |
 |---|---|---|
@@ -71,7 +71,7 @@ L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/
 | **A1** | recouvrement H4 fait au niveau notebook via V1 (Jaccard) — **résolu** | H4 (recouvrement) |
 | **A2** | `quasar bench sweep [m…] --metric reachability\|fixpoints\|load --json` — **livré ✅** | courbe H5 automatisée |
 | **A3** | `quasar bench ablation <m> --goal … --json` (CTMC/MDD/CEGAR) — **livré ✅** | H6 (ablation) |
-| **M1** | options globales `--json` et `--cache-dir` | repro / cache CLI |
+| **M1** | options globales `--json` / `--cache-dir` (ou `QUASAR_JSON`/`QUASAR_CACHE_DIR`) — **livré ✅** | repro / cache CLI |
 | **M2** | `quasar bench validate … --json` → `{soundness, tightness, relGap, delayGap, scenarioOverlap}` — **livré ✅** | rapport H1–H4 consolidé |
 
 ## Note d'environnement (rendu des figures)

@@ -106,10 +106,12 @@ avec `--json` en sous-processus — contrat stable, aucun état caché. Le SDK
 pilotage CLI par défaut pour la reproductibilité (voir le choix documenté en
 Section 7).
 
-> *Note reproductibilité.* L'option globale `--cache-dir` du plan n'est pas
-> câblée dans la CLI ; on mémoïse donc les appels **au niveau notebook**
-> (dictionnaire `_CACHE`). Cellules idempotentes : ré-exécuter ne relance pas un
-> appel déjà vu. Fiche correspondante en Section 7.
+> *Note reproductibilité.* Les options globales `--json` et `--cache-dir` (fiche
+> M1) sont désormais disponibles dans la CLI (cache persistant du groupe
+> `analyze`, clé = hash du contenu du modèle + flags). Le notebook conserve
+> néanmoins sa **mémoïsation au niveau notebook** (`_CACHE`) pour les cellules de
+> mesure de temps (H5/ablation), où le cache CLI fausserait les chronométrages.
+> Cellules idempotentes : ré-exécuter ne relance pas un appel déjà vu.
 """)
 
 code(r'''
@@ -198,6 +200,21 @@ if not (ORACLES["maboss"] or ORACLES["storm"]):
          (CTMC/MDD via `analyze probability --symbolic` et BFS du cône via
          `analyze compare`, qui pose `sound = (binf ≤ exact)`).
     '''))
+""")
+
+code(r"""
+# Démonstration des options globales (fiche M1) : --json global + cache persistant.
+import tempfile, subprocess as _sp
+_demo = tempfile.mkdtemp(prefix="quasar-m1-")
+_cmd = ["java", "-jar", str(JAR), "--json", "--cache-dir", _demo,
+        "analyze", "probability", str(MODELS_DIR / "cellfate.bnd"), "--goal", "Apoptosis=1"]
+_r1 = _sp.run(_cmd, capture_output=True, text=True)   # miss : calcule + écrit le cache
+_files = list(__import__("pathlib").Path(_demo).glob("*.out"))
+_r2 = _sp.run(_cmd, capture_output=True, text=True)    # hit : rejoue depuis le cache
+print("--json global -> JSON :", _r1.stdout.strip()[:60], "…")
+print(f"--cache-dir : {len(_files)} fichier(s) de cache ; sortie identique au hit :",
+      _r1.stdout == _r2.stdout)
+__import__("shutil").rmtree(_demo, ignore_errors=True)
 """)
 
 # --- Section 1 -------------------------------------------------------------
@@ -672,13 +689,13 @@ ABLATION
 
 # --- Section 7 -------------------------------------------------------------
 md(r"""
-## Section 7 — Modules QUASAR manquants (rapport)
+## Section 7 — Modules QUASAR (rapport)
 
-Fiches de proposition pour chaque capacité requise par l'expérience mais absente
-de la CLI actuelle. **Aucune n'est implémentée dans ce notebook** : elles sont
-décrites pour arbitrage. (Surface réelle constatée : 45/49 commandes du
-`CLAUDE.md §7` ; les manques sont surtout des options avancées et les oracles
-externes.)
+Fiches de proposition issues de l'expérience. **Toutes ont été implémentées dans
+QUASAR** (P0–M2) ; le notebook les exploite désormais directement. Le seul
+prérequis externe restant est l'installation des oracles MaBoSS/Storm et
+l'acquisition des grands modèles. Le tableau ci-dessous garde l'historique des
+fiches et leur statut.
 """)
 
 code(r'''
@@ -711,8 +728,8 @@ PROPOSALS = [
      "io": "{reference, strategies:[{strategy, value, exact, ddNodes, timeMs, agrees}]}",
      "bloque": "RÉSOLU ✅ — ablation CTMC/MDD/CEGAR (H6) ; --semiring/cycle-policy intrinsèques"},
     {"id": "M1", "besoin": "Sortie JSON globale + cache persistant", "module": "cli",
-     "signature": "options globales --json et --cache-dir <dir>",
-     "io": "-", "bloque": "Mémoïsation CLI (contournée au niveau notebook)"},
+     "signature": "--json / --cache-dir <dir> en tête (ou QUASAR_JSON / QUASAR_CACHE_DIR)",
+     "io": "-", "bloque": "RÉSOLU ✅ — cache persistant du groupe analyze"},
     {"id": "M2", "besoin": "Métriques de validation structurées", "module": "analysis/cli",
      "signature": "quasar bench validate <m> --goal ... --json",
      "io": "{soundness, tightness, relGap, delayGap, scenarioOverlap, oracle}",
