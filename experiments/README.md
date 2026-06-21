@@ -72,7 +72,7 @@ L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/
 | **A2** | `quasar bench sweep [m…] --metric reachability\|fixpoints\|load --json` — **livré ✅** | courbe H5 automatisée |
 | **A3** | `quasar bench ablation <m> --goal … --json` (CTMC/MDD/CEGAR) — **livré ✅** | H6 (ablation) |
 | **M1** | options globales `--json` et `--cache-dir` | repro / cache CLI |
-| **M2** | `quasar bench validate … --json` → `{soundness, tightness, delay_gap, scenario_overlap}` | rapport H1–H4 |
+| **M2** | `quasar bench validate … --json` → `{soundness, tightness, relGap, delayGap, scenarioOverlap}` — **livré ✅** | rapport H1–H4 consolidé |
 
 ## Note d'environnement (rendu des figures)
 

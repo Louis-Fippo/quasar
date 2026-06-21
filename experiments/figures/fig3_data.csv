@@ -1,6 +1,6 @@
 modèle,automates,états atteignables,t_QUASAR (s),t_Storm (s)
-phasetype-demo.anx,1,3,0.0006,
-multivalued-demo.anx,2,6,0.0019,
-p53-mdm2.anx,3,4,0.0025,
-p53-mdm2.bnd,3,4,0.0027,
-cellfate.bnd,11,71,0.052,
+phasetype-demo.anx,1,3,0.0003,
+multivalued-demo.anx,2,6,0.0008,
+p53-mdm2.anx,3,4,0.0011,
+p53-mdm2.bnd,3,4,0.001,
+cellfate.bnd,11,71,0.0243,

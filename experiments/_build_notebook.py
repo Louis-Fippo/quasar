@@ -713,9 +713,10 @@ PROPOSALS = [
     {"id": "M1", "besoin": "Sortie JSON globale + cache persistant", "module": "cli",
      "signature": "options globales --json et --cache-dir <dir>",
      "io": "-", "bloque": "Mémoïsation CLI (contournée au niveau notebook)"},
-    {"id": "M2", "besoin": "Métriques de validation structurées", "module": "bench",
+    {"id": "M2", "besoin": "Métriques de validation structurées", "module": "analysis/cli",
      "signature": "quasar bench validate <m> --goal ... --json",
-     "io": "{soundness, tightness, delay_gap, scenario_overlap}", "bloque": "Rapport H1–H4 automatisé"},
+     "io": "{soundness, tightness, relGap, delayGap, scenarioOverlap, oracle}",
+     "bloque": "RÉSOLU ✅ — rapport H1/H3/H2/H4 consolidé (Section 8)"},
 ]
 PROPS = pd.DataFrame(PROPOSALS)
 pd.set_option("display.max_colwidth", 60)
@@ -866,6 +867,29 @@ _p = FIG / "fig4_convergence_anytime.png"
 if render_figure(_draw4, _p):
     display(Image(filename=str(_p)))
 ''')
+
+code(r"""
+# ---- Rapport de validation consolidé (M2) ----
+# `bench validate --json` réunit H1 (soundness), H3 (tightness/relGap),
+# H2 (delayGap, si MaBoSS) et H4 (scenarioOverlap, si MaBoSS) par (modèle, but).
+report_rows = []
+for name, goal, frm in GOALS:
+    bnd = bnd_of(name)  # .bnd si disponible -> active l'oracle MaBoSS (sinon ANX)
+    r = run_quasar(["bench", "validate", str(bnd or MODELS[name]["anx"]), "--goal", goal],
+                   use_cache=False).get("data") or {}
+    report_rows.append({
+        "modèle": name, "objectif": goal,
+        "soundness": r.get("soundness"), "tightness": r.get("tightness"),
+        "relGap": r.get("relGap"), "binf": r.get("binf"), "exact": r.get("exact"),
+        "delayGap": r.get("delayGap"), "scenarioOverlap": r.get("scenarioOverlap"),
+        "oracle": r.get("oracle"),
+    })
+CONSOLIDATED = pd.DataFrame(report_rows)
+assert CONSOLIDATED["soundness"].dropna().all(), "❌ M2 : une borne non sûre détectée !"
+print("✅ Rapport consolidé : toutes les bornes sûres (soundness).")
+print("   delayGap/scenarioOverlap renseignés seulement si MaBoSS présent.")
+CONSOLIDATED
+""")
 
 code(r"""
 # ---- Tableau de synthèse H1–H6 ----
