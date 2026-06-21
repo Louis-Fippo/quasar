@@ -602,27 +602,33 @@ md(r"""
 """)
 
 code(r"""
-# ===================== H5 — SCALABILITÉ ===================================
-# Temps QUASAR vs taille ; temps Storm exact (V2) superposé si présent —
-# le point où Storm dépasse le TIMEOUT marque son explosion.
+# ===================== H5 — SCALABILITÉ (automatisée, A2) =================
+# `bench sweep` produit la courbe taille -> temps en un appel (métrique sans
+# objectif : états atteignables symboliques). Storm exact (V2) superposé pour
+# les modèles ayant un objectif (le TIMEOUT marque son explosion).
+from pathlib import Path as _Path
+sw = (run_quasar(["bench", "sweep", "--dir", str(MODELS_DIR),
+                  "--metric", "reachability", "--reps", "2"], use_cache=False).get("data") or {})
+goal_by_file = {_Path(MODELS[n]["anx"]).name: (MODELS[n]["anx"], g, f) for n, g, f in GOALS}
+
 scal_rows = []
-for name, goal, frm in GOALS:
-    anx = MODELS[name]["anx"]
-    nbaut = int(SUMMARY.loc[SUMMARY["modèle"] == name, "automates"].iloc[0])
-    rq = run_quasar(["analyze", "probability", str(anx), "--goal", goal] + _extra(frm),
-                    use_cache=False)
+for r in sw.get("results", []):
+    fname = _Path(r["model"]).name
     t_storm = None
-    if ORACLES["storm"]:
+    if ORACLES["storm"] and fname in goal_by_file:
+        anx, goal, frm = goal_by_file[fname]
         rs = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "prob"],
                         use_cache=False)
         t_storm = "TIMEOUT" if rs.get("_timeout") else round(rs["_elapsed"], 3)
-    scal_rows.append({"modèle": name, "objectif": goal, "automates": nbaut,
-                      "t_QUASAR (s)": round(rq["_elapsed"], 3), "t_Storm (s)": t_storm})
+    scal_rows.append({"modèle": fname, "automates": r.get("automata"),
+                      "états atteignables": r.get("value"),
+                      "t_QUASAR (s)": round((r.get("timeMs") or 0.0) / 1000.0, 4),
+                      "t_Storm (s)": t_storm})
 SCALABILITY = pd.DataFrame(scal_rows).sort_values("automates")
 if not ORACLES["storm"]:
     print("⚠️ Storm absent → colonne t_Storm vide (point d'explosion non mesurable ici).")
 print("⚠️ PARTIEL — grands modèles (Naldi ~40, Abou-Jaoudé 101, TCR) non acquis :")
-print("   la courbe s'arrête aux modèles disponibles.")
+print("   `bench sweep` les inclurait automatiquement une fois déposés dans bench/models.")
 SCALABILITY
 """)
 
@@ -696,9 +702,10 @@ PROPOSALS = [
     {"id": "A1", "besoin": "Comparaison scénario ↔ oracle (H4)", "module": "analysis/notebook",
      "signature": "recouvrement Jaccard (scénario QUASAR ↔ nodeActivation V1)",
      "io": "{overlap}", "bloque": "RÉSOLU au niveau notebook via V1 (Section 5)"},
-    {"id": "A2", "besoin": "Balayage de tailles (H5)", "module": "bench",
-     "signature": "quasar bench sweep --models ... --metric time --json",
-     "io": "[{model, size, time}]", "bloque": "Courbe de scalabilité automatisée"},
+    {"id": "A2", "besoin": "Balayage de tailles (H5)", "module": "cli/bench",
+     "signature": "quasar bench sweep [m…] [--dir D] --metric reachability|fixpoints|load --json",
+     "io": "{metric, results:[{model, automata, value, timeMs}]}",
+     "bloque": "RÉSOLU ✅ — courbe H5 automatisée (triée par taille)"},
     {"id": "A3", "besoin": "Ablation des stratégies (H6)", "module": "cli/bench",
      "signature": "quasar bench ablation <m> --goal ... [--budget N] [--reps R] --json",
      "io": "{reference, strategies:[{strategy, value, exact, ddNodes, timeMs, agrees}]}",
@@ -813,11 +820,10 @@ display(df3)
 def _draw3():
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(6, 4))
-    # nuage de points (plusieurs objectifs partagent une même taille) — pas de
-    # ligne trompeuse ; sur ces petits modèles le temps est dominé par le
-    # démarrage JVM (~0.5 s), d'où l'absence de tendance d'échelle exploitable.
+    # `bench sweep` (A2) : temps de calcul interne (hors démarrage JVM) vs taille
+    # -> tendance d'échelle exploitable. Un point par modèle, trié par taille.
     ax.scatter(df3["automates"], df3["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3,
-               label="QUASAR")
+               label="QUASAR (bench sweep)")
     for _, r in df3.iterrows():
         ax.annotate(r["modèle"], (r["automates"], r["t_QUASAR (s)"]),
                     textcoords="offset points", xytext=(6, 3), fontsize=7)
@@ -830,7 +836,7 @@ def _draw3():
             ax.legend(fontsize=8)
     ax.set_xlabel("# automates"); ax.set_ylabel("temps (s)")
     ax.set_ylim(0, max(0.1, float(df3["t_QUASAR (s)"].max()) * 1.3))
-    ax.set_title("H5 — temps vs taille (petits modèles : dominé par le démarrage JVM)")
+    ax.set_title("H5 — temps de calcul vs taille (bench sweep, A2)")
     fig.tight_layout(); fig.savefig(FIG / "fig3_scalabilite.png", dpi=130)
 
 _p = FIG / "fig3_scalabilite.png"
@@ -864,8 +870,8 @@ if render_figure(_draw4, _p):
 code(r"""
 # ---- Tableau de synthèse H1–H6 ----
 def _status_h5():
-    base = "PARTIEL — grands modèles non acquis"
-    return base + (" ; Storm exact (V2) mesuré" if ORACLES["storm"]
+    base = "AUTOMATISÉ (A2, bench sweep) — courbe taille→temps ; grands modèles dès qu'acquis"
+    return base + (" ; Storm exact (V2) en regard" if ORACLES["storm"]
                    else " ; Storm (V2) prêt, SKIPPED (absent)")
 
 SYNTHESE = pd.DataFrame([
