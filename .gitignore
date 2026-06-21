@@ -23,6 +23,12 @@ __pycache__/
 .quasar-repo/
 
 # Intermédiaires générés par le notebook d'expériences
-experiments/cellfate.anx
+experiments/*.anx
 experiments/valued_demo.anx
 experiments/*.valued.anx
+
+# Modèles externes acquis (régénérables via experiments/acquire_models.sh)
+experiments/external/*.sbml
+experiments/external/*.anx
+experiments/external/source/
+experiments/.acquire-cache/

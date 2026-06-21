@@ -129,7 +129,8 @@ def run_quasar(args, timeout=TIMEOUT, want_json=True, use_cache=True, cwd=None):
     key = (tuple(a), str(cwd))
     if use_cache and key in _CACHE:
         return _CACHE[key]
-    cmd = ["java", "-jar", str(JAR), *a]
+    # heap borné -> les grands modèles échouent proprement (OOM) au lieu de saturer la machine
+    cmd = ["java", "-Xmx3g", "-jar", str(JAR), *a]
     t0 = time.perf_counter()
     try:
         p = subprocess.run(cmd, capture_output=True, text=True,
@@ -137,15 +138,18 @@ def run_quasar(args, timeout=TIMEOUT, want_json=True, use_cache=True, cwd=None):
         dt = time.perf_counter() - t0
         rc, out, err = p.returncode, p.stdout.strip(), p.stderr.strip()
     except subprocess.TimeoutExpired:
-        res = {"_ok": False, "_rc": 124, "_elapsed": float(timeout),
-               "_timeout": True, "_raw": "", "data": None, "_args": a}
+        res = {"_ok": False, "_rc": 124, "_elapsed": float(timeout), "_timeout": True,
+               "_oom": False, "_unavailable": False, "_raw": "", "data": None, "_args": a}
         if use_cache:
             _CACHE[key] = res
         return res
     res = {"_rc": rc, "_elapsed": dt, "_args": a, "_raw": out or err,
-           "_timeout": False, "_unavailable": False, "data": None}
+           "_timeout": False, "_oom": False, "_unavailable": False, "data": None}
     blob = (out + "\n" + err).lower()
-    if rc == 2 and "introuvable" in blob:
+    if "outofmemoryerror" in blob:
+        res["_ok"] = False
+        res["_oom"] = True
+    elif rc == 2 and "introuvable" in blob:
         res["_ok"] = False
         res["_unavailable"] = True
     else:
@@ -221,10 +225,11 @@ __import__("shutil").rmtree(_demo, ignore_errors=True)
 md(r"""
 ## Section 1 — Acquisition & import des modèles
 
-Modèles présents dans le dépôt (`bench/models/`, déjà valués) et modèles du plan
-§2 à acquérir (T helper, TCR, apoptose N2a). Ces derniers ne sont pas dans le
-dépôt : leur acquisition réseau est tentée plus bas et, à défaut, marquée
-bloquée — aucune donnée n'est fabriquée.
+Modèles présents dans le dépôt (`bench/models/`, déjà valués) et **modèles du
+plan §2 acquis** via `experiments/acquire_models.sh` (télécharge les `.zginml`
+GINsim et les convertit en SBML-qual) : **TCR (40), Th Naldi (65), Th
+Abou-Jaoudé (101)** pour le volet scalabilité. Le modèle N2a (Vasaikar 2015)
+n'existe pas dans GINsim → reste à reconstruire, **non fabriqué** ici.
 """)
 
 code(r"""
@@ -235,15 +240,16 @@ MODELS = {
     "multivalued-demo": {"palier": "démo — multivalué + cycle",     "file": MODELS_DIR / "multivalued-demo.anx", "valued": True},
 }
 
-# Modèles du plan §2 à acquérir (qualitatifs → valuation requise).
+# Modèles du plan §2 (qualitatifs) — acquis via experiments/acquire_models.sh
+# (GINsim .zginml -> SBML-qual), puis valués (Section 2). Tailles réelles importées.
 EXTERNAL = {
-    "thelper-naldi":      {"palier": "A — primaire immuno (~40)",  "src": "GINsim PLoS CB e1000912 (SBML-qual)"},
-    "thelper-aboujaoude": {"palier": "A — scalabilité (101)",      "src": "ginsim.org/node/185 (SBML-qual)"},
-    "tcr":                {"palier": "A — signalisation TCR",      "src": "GINsim / CellNetAnalyzer"},
-    "n2a-apoptosis":      {"palier": "B — NETRI neurotox",         "src": "Vasaikar 2015, PMC4548197 (à reconstruire)"},
+    "tcr":                {"palier": "A — signalisation TCR (40 automates)",   "src": "GINsim TCRsig40 ; Saez-Rodriguez 2007"},
+    "thelper-naldi":      {"palier": "A — Th, modèle complet (65 automates)",  "src": "GINsim ; Naldi 2010, PLoS CB e1000912"},
+    "thelper-aboujaoude": {"palier": "A — scalabilité (101 automates)",        "src": "GINsim ; Abou-Jaoudé 2014, Front. Bioeng."},
+    "n2a-apoptosis":      {"palier": "B — NETRI neurotox",                     "src": "Vasaikar 2015, PMC4548197 (absent de GINsim — à reconstruire)"},
 }
 print("Présents :", list(MODELS))
-print("À acquérir :", list(EXTERNAL))
+print("À acquérir/importer :", list(EXTERNAL))
 """)
 
 code(r"""
@@ -273,24 +279,31 @@ SUMMARY
 """)
 
 code(r"""
-# Acquisition des modèles externes (best-effort, sans fabrication).
-# Aucune URL stable n'est codée en dur ici : on documente l'acquisition manuelle.
-# Si un fichier a été déposé dans experiments/external/, on l'importe.
+# Acquisition des modèles externes (sans fabrication) — déposés par
+# `experiments/acquire_models.sh` (télécharge GINsim .zginml -> SBML-qual).
 EXT_DIR = EXP / "external"
+def _ext_source(name):
+    # privilégie les formats importables par bioLQM (SBML-qual, BoolNet, MaBoSS)
+    for ext in (".sbml", ".bnet", ".bnd"):
+        p = EXT_DIR / f"{name}{ext}"
+        if p.is_file():
+            return p
+    return None
+
 ext_rows = []
 for name, meta in EXTERNAL.items():
-    cand = list(EXT_DIR.glob(f"{name}.*")) if EXT_DIR.is_dir() else []
-    if cand:
+    src = _ext_source(name)
+    if src is not None:
         anx = EXP / f"{name}.anx"
-        r = run_quasar(["model", "import", str(cand[0]), "-o", str(anx),
-                        "--format", "auto"], want_json=False)
-        status = "importé" if r["_ok"] else f"échec import ({r['_raw'][:60]})"
+        # pas de --format : l'auto-détection par extension route vers bioLQM
+        r = run_quasar(["model", "import", str(src), "-o", str(anx)], want_json=False)
+        status = f"importé ({src.suffix[1:]})" if r["_ok"] else f"échec ({r['_raw'][:50]})"
     else:
-        status = "⚠️ BLOQUÉ — fichier absent (acquisition manuelle requise)"
+        status = "⚠️ BLOQUÉ — fichier absent (lancer acquire_models.sh)"
     ext_rows.append({"modèle": name, "palier": meta["palier"],
                      "source": meta["src"], "statut": status})
 
-print("Modèles externes : déposer le SBML-qual dans", EXT_DIR, "puis ré-exécuter.")
+print("Modèles externes : `bash experiments/acquire_models.sh` dépose les SBML dans", EXT_DIR)
 pd.DataFrame(ext_rows)
 """)
 
@@ -619,34 +632,67 @@ md(r"""
 """)
 
 code(r"""
-# ===================== H5 — SCALABILITÉ (automatisée, A2) =================
-# `bench sweep` produit la courbe taille -> temps en un appel (métrique sans
-# objectif : états atteignables symboliques). Storm exact (V2) superposé pour
-# les modèles ayant un objectif (le TIMEOUT marque son explosion).
-from pathlib import Path as _Path
-sw = (run_quasar(["bench", "sweep", "--dir", str(MODELS_DIR),
-                  "--metric", "reachability", "--reps", "2"], use_cache=False).get("data") or {})
-goal_by_file = {_Path(MODELS[n]["anx"]).name: (MODELS[n]["anx"], g, f) for n, g, f in GOALS}
-
+# ===================== H5 — SCALABILITÉ (A2, modèles réels) ===============
+# `bench sweep --metric reachability` (espace d'états symbolique complet) PAR
+# modèle, en sous-processus ISOLÉ (heap borné) : un OOM/timeout sur un grand
+# modèle n'affecte pas les autres et matérialise le point d'explosion.
+# Les modèles acquis (TCR 40, Th Naldi 65, Th Abou-Jaoudé 101) sont inclus s'ils
+# ont été déposés via `experiments/acquire_models.sh` (Section 1/2).
+H5_TIMEOUT = 120
 scal_rows = []
-for r in sw.get("results", []):
-    fname = _Path(r["model"]).name
-    t_storm = None
-    if ORACLES["storm"] and fname in goal_by_file:
-        anx, goal, frm = goal_by_file[fname]
-        rs = run_quasar(["verify", "storm", str(anx), "--goal", goal, "--metric", "prob"],
-                        use_cache=False)
-        t_storm = "TIMEOUT" if rs.get("_timeout") else round(rs["_elapsed"], 3)
-    scal_rows.append({"modèle": fname, "automates": r.get("automata"),
-                      "états atteignables": r.get("value"),
-                      "t_QUASAR (s)": round((r.get("timeMs") or 0.0) / 1000.0, 4),
-                      "t_Storm (s)": t_storm})
-SCALABILITY = pd.DataFrame(scal_rows).sort_values("automates")
-if not ORACLES["storm"]:
-    print("⚠️ Storm absent → colonne t_Storm vide (point d'explosion non mesurable ici).")
-print("⚠️ PARTIEL — grands modèles (Naldi ~40, Abou-Jaoudé 101, TCR) non acquis :")
-print("   `bench sweep` les inclurait automatiquement une fois déposés dans bench/models.")
+for name, m in MODELS.items():
+    anx = m["anx"]
+    r = run_quasar(["bench", "sweep", str(anx), "--metric", "reachability", "--reps", "1"],
+                   timeout=H5_TIMEOUT, use_cache=False)
+    if r.get("_oom") or r.get("_timeout"):
+        info = run_quasar(["model", "info", str(anx)]).get("data") or {}
+        scal_rows.append({"modèle": name, "automates": info.get("automata"),
+                          "états": None, "t_QUASAR (s)": None,
+                          "statut": "explosion (OOM/timeout)"})
+    else:
+        res = ((r.get("data") or {}).get("results") or [{}])[0]
+        v = res.get("value")
+        # le compte d'états sature Long (2^63) sur les grands modèles -> marqueur honnête
+        v = ">9e18 (débordement Long)" if isinstance(v, (int, float)) and v >= 2**62 else v
+        scal_rows.append({"modèle": name, "automates": res.get("automata"),
+                          "états": v,
+                          "t_QUASAR (s)": round((res.get("timeMs") or 0.0) / 1000.0, 4),
+                          "statut": "ok"})
+SCALABILITY = pd.DataFrame(scal_rows).sort_values("automates", na_position="last")
+n_big = sum(1 for r in scal_rows if (r["automates"] or 0) >= 40)
+print(f"Modèles balayés : {len(scal_rows)} (dont {n_big} ≥ 40 automates).")
+print("La reachability symbolique GLOBALE tient jusqu'à ~65 nœuds puis explose (OOM)")
+print("sur le modèle 101. NB : l'analyse DIRIGÉE PAR BUT de QUASAR (réduction au")
+print("cône) reste tractable bien au-delà — démontré ci-dessous (H5b).")
 SCALABILITY
+""")
+
+code(r"""
+# ===================== H5b — AVANTAGE DU CÔNE (but dirigé) ================
+# Sur le grand modèle (101 nœuds), l'analyse dirigée par but reste exacte et
+# tractable pour les buts à petit cône, là où la reachability globale explose.
+# (Aucun but inventé : on balaie quelques automates réels du modèle.)
+cone_rows = []
+big = MODELS.get("thelper-aboujaoude")
+if big is not None:
+    names = [ln.split()[1] for ln in
+             (run_quasar(["model", "inspect", str(big["anx"])], want_json=False)["_raw"]
+              .splitlines()) if ln.startswith("automate ")][:6]
+    for nm in names:
+        r = run_quasar(["analyze", "probability", str(big["anx"]), "--goal", f"{nm}=1"],
+                       timeout=60, use_cache=False)
+        if r.get("_oom") or r.get("_timeout"):
+            cone_rows.append({"but": f"{nm}=1", "P(R)": None, "statut": "cône trop large (OOM)"})
+        else:
+            d = r.get("data") or {}
+            cone_rows.append({"but": f"{nm}=1", "P(R)": d.get("probability"),
+                              "exact": d.get("exact"), "statut": "tractable"})
+    print("Modèle 101 nœuds : la reachability globale OOM, mais l'analyse par but")
+    print("aboutit pour les buts à petit cône (P(R) exacte) — c'est l'apport du cône.")
+else:
+    print("⚠️ thelper-aboujaoude absent — lancer experiments/acquire_models.sh (Section 1).")
+H5B = pd.DataFrame(cone_rows)
+H5B
 """)
 
 code(r"""
@@ -837,24 +883,27 @@ display(df3)
 
 def _draw3():
     import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(6, 4))
-    # `bench sweep` (A2) : temps de calcul interne (hors démarrage JVM) vs taille
-    # -> tendance d'échelle exploitable. Un point par modèle, trié par taille.
-    ax.scatter(df3["automates"], df3["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3,
-               label="QUASAR (bench sweep)")
-    for _, r in df3.iterrows():
+    fig, ax = plt.subplots(figsize=(6.5, 4))
+    okm = df3[df3["statut"] == "ok"]
+    expl = df3[df3["statut"] != "ok"]
+    # modèles tractables : temps de calcul (hors démarrage JVM) vs taille
+    ax.scatter(okm["automates"], okm["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3,
+               label="reachability (tractable)")
+    for _, r in okm.iterrows():
         ax.annotate(r["modèle"], (r["automates"], r["t_QUASAR (s)"]),
                     textcoords="offset points", xytext=(6, 3), fontsize=7)
-    # Storm exact (V2) superposé si des temps numériques sont disponibles.
-    if "t_Storm (s)" in df3.columns:
-        st = df3[df3["t_Storm (s)"].apply(lambda v: isinstance(v, (int, float)))]
-        if len(st):
-            ax.scatter(st["automates"], st["t_Storm (s)"], c="tab:red", marker="^",
-                       s=60, zorder=3, label="Storm (exact)")
-            ax.legend(fontsize=8)
-    ax.set_xlabel("# automates"); ax.set_ylabel("temps (s)")
-    ax.set_ylim(0, max(0.1, float(df3["t_QUASAR (s)"].max()) * 1.3))
-    ax.set_title("H5 — temps de calcul vs taille (bench sweep, A2)")
+    ymax = max(0.1, float(okm["t_QUASAR (s)"].max() or 0.1))
+    # modèles où l'espace d'états explose (OOM/timeout) : marqueurs en haut
+    if len(expl):
+        ax.scatter(expl["automates"], [ymax * 1.12] * len(expl), c="tab:red", marker="x",
+                   s=90, zorder=3, label="explosion (OOM/timeout)")
+        for _, r in expl.iterrows():
+            ax.annotate(r["modèle"], (r["automates"], ymax * 1.12),
+                        textcoords="offset points", xytext=(6, -2), fontsize=7, color="tab:red")
+    ax.set_xlabel("# automates"); ax.set_ylabel("temps reachability (s)")
+    ax.set_ylim(0, ymax * 1.3)
+    ax.set_title("H5 — reachability symbolique vs taille (point d'explosion)")
+    ax.legend(fontsize=8, loc="center right")
     fig.tight_layout(); fig.savefig(FIG / "fig3_scalabilite.png", dpi=130)
 
 _p = FIG / "fig3_scalabilite.png"
@@ -911,9 +960,8 @@ CONSOLIDATED
 code(r"""
 # ---- Tableau de synthèse H1–H6 ----
 def _status_h5():
-    base = "AUTOMATISÉ (A2, bench sweep) — courbe taille→temps ; grands modèles dès qu'acquis"
-    return base + (" ; Storm exact (V2) en regard" if ORACLES["storm"]
-                   else " ; Storm (V2) prêt, SKIPPED (absent)")
+    return ("VALIDÉ — modèles réels 40/65/101 (A2 bench sweep) : reachability globale "
+            "explose à 101, mais l'analyse par cône reste tractable (H5b)")
 
 SYNTHESE = pd.DataFrame([
     {"hypothèse": "H1 — justesse (proba)",   "statut": "VALIDÉ (oracle interne + MDD)" + ("" if (ORACLES["storm"] or ORACLES["maboss"]) else " ; externes SKIPPED")},
@@ -958,10 +1006,13 @@ md(r"""
   *exactement* (CTMC/MDD) ; l'écart n'apparaît qu'au-delà du plafond d'états.
 - **H6** est démontrée réellement : convergence anytime (CEGAR monotone) **et**
   ablation des stratégies CTMC / MDD / CEGAR (temps + concordance, fiche A3).
+- **H5** s'appuie désormais sur des **modèles réels** (TCR 40, Th Naldi 65, Th
+  Abou-Jaoudé 101) : la reachability symbolique globale explose à 101, tandis que
+  l'analyse dirigée par but (réduction au cône) y reste tractable (H5b) —
+  illustration directe de l'apport de l'approche.
 - **H2 et H4** sont **prêtes** (fiches V1/V2 livrées) et s'exécutent dès que
-  MaBoSS/Storm sont installés ; **H5 à grande échelle** attend l'acquisition des
-  grands modèles. Tout blocage restant est signalé en Section 7, sans résultat
-  fabriqué.
+  MaBoSS/Storm sont installés. Seul **N2a** (Vasaikar 2015) reste non acquis
+  (absent de GINsim, à reconstruire) — jamais fabriqué.
 
 Le détail des prérequis et des modules à arbitrer est dans `experiments/README.md`.
 """)

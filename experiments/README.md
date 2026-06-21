@@ -12,6 +12,8 @@ scalabilité). Brief complet : `../PLAN_EXPERIMENTAL_validation_chap4.md`.
 | `_build_notebook.py` | **générateur** du notebook (source de vérité ; régénère le `.ipynb`) |
 | `figures/` | PNG des figures + données `figN_data.csv` |
 | `validation_chap4.bundle` | run-bundle reproductible (modèle + tags) |
+| `acquire_models.sh` | acquisition des modèles externes (GINsim → SBML-qual) |
+| `external/PROVENANCE.md` | provenance/citations des modèles externes (non versionnés) |
 
 > Le notebook est *généré* : pour le modifier, éditer `_build_notebook.py` puis
 > `python _build_notebook.py`. Cela garantit qu'aucun résultat n'est saisi à la
@@ -54,7 +56,7 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 | **H2 — justesse (délai)** | ✅ PRÊT (fiche V1 livrée) — T(R) vs quantiles de temps d'atteinte MaBoSS ; exécuté si MaBoSS présent, sinon SKIPPED |
 | **H3 — finesse** | ✅ VALIDÉ — écart nul (P(R) calculée exactement sur ces modèles) |
 | **H4 — scénarios** | ✅ PRÊT (fiche V1 livrée) — recouvrement Jaccard scénario QUASAR ↔ nœuds activés MaBoSS ; SKIPPED si MaBoSS absent |
-| **H5 — scalabilité** | ✅ AUTOMATISÉ (fiche A2, `bench sweep`) — courbe taille→temps ; Storm exact (V2) en regard ; grands modèles dès qu'acquis |
+| **H5 — scalabilité** | ✅ VALIDÉ — modèles réels 40/65/101 (`bench sweep`) : reachability globale explose à 101 ; l'analyse par cône y reste tractable (H5b) |
 | **H6 — optimisations** | ✅ VALIDÉ — convergence anytime + ablation CTMC/MDD/CEGAR (temps & concordance, fiche A3) |
 
 ## Modules QUASAR à arbitrer (Section 7 du notebook)
@@ -88,10 +90,17 @@ si matplotlib échouait malgré tout, la cellule afficherait et exporterait les
 
 ## Acquisition des modèles externes
 
-Les modèles qualitatifs du plan (T helper Naldi, Abou-Jaoudé 101, TCR, apoptose
-N2a) ne sont pas dans le dépôt. Pour les inclure : déposer leur SBML-qual dans
-`experiments/external/<nom>.sbml` puis ré-exécuter (la Section 1 les importe). La
-Section 2 les **value automatiquement** via `model assign-rates --policy unit`
-(fiche P1, désormais implémentée) ; l'analyse de sensibilité utilise `--policy
-sample --seed N`. Reste seulement l'**acquisition** (téléchargement) à la charge
-de l'utilisateur.
+```bash
+bash experiments/acquire_models.sh   # GINsim .zginml -> SBML-qual dans external/
+```
+
+Le script télécharge **TCR (40)**, **Th Naldi (65)** et **Th Abou-Jaoudé (101)**
+depuis GINsim et les convertit en SBML-qual (via GINsim, seul à lire le ginml ;
+bioLQM 0.8 ne sait que l'exporter). La Section 1 du notebook les importe, la
+Section 2 les **value** (`model assign-rates --policy unit`, fiche P1), et la
+Section 6 (H5/H5b) les utilise pour la scalabilité. Voir `external/PROVENANCE.md`
+pour les citations et la licence.
+
+Les fichiers `external/*.sbml`/`*.anx` ne sont **pas versionnés** (artefacts
+tiers régénérables). Le modèle **N2a** (Vasaikar 2015) est absent de GINsim — à
+reconstruire manuellement, **non fabriqué** ici.
