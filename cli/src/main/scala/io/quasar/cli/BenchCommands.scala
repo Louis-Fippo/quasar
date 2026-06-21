@@ -7,13 +7,13 @@ import io.quasar.analysis.{
   QuantCegar,
   QuantResult,
   Quantitative,
-  Reachability,
-  SymbolicMdd
+  SymbolicMdd,
+  ValidationMetrics
 }
 import io.quasar.core.Approx
 import io.quasar.core.ir.LocalState
 import io.quasar.core.ir.Context
-import io.quasar.verify.{MaBossAdapter, ToolStatus}
+import io.quasar.verify.{MaBossAdapter, MaBossHitting, ToolStatus}
 
 import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters.*
@@ -44,8 +44,63 @@ object BenchCommands:
     }
   }
 
+  /** Rapport de validation consolidé (fiche M2). Champs oracle à `None` si MaBoSS absent. */
+  private final case class ValidationReport(
+      binf: Option[Double],
+      exact: Option[Double],
+      soundness: Option[Boolean],
+      tightness: Option[Double],
+      relGap: Option[Double],
+      tQuasar: Option[Double],
+      delayGap: Option[Double],
+      scenarioOverlap: Option[Double],
+      oracle: String
+  )
+
+  /** Temps d'atteinte MaBoSS si le binaire est présent et le modèle au format `.bnd`. */
+  private def mabossHitting(path: String, goal: LocalState): Option[MaBossHitting] =
+    if !path.toLowerCase.endsWith(".bnd") || MaBossAdapter.status() == ToolStatus.Missing then None
+    else
+      val cfg = path.replaceAll("(?i)\\.bnd$", ".cfg")
+      MaBossAdapter.hittingTime(path, cfg, goal.automaton).toOption
+
+  private def buildReport(
+      net: io.quasar.core.ir.AutomataNetwork,
+      path: String,
+      goal: LocalState
+  ): ValidationReport =
+    val ctx = net.metadata.initial.getOrElse(Context.empty)
+    val q = Quantitative.analyze(net, ctx, goal)
+    val binfB = q.probLowerBound
+    val binf = binfB.map(_.value)
+    // référence exacte : MDD symbolique si possible, sinon la borne si déjà exacte (CTMC).
+    val mddExact = SymbolicMdd.reachProbability(net, ctx, goal).toOption.map(_.reachProbability)
+    val exact = mddExact.orElse(binfB.collect { case b if b.approx == Approx.Exact => b.value })
+    val bounds = for b <- binf; e <- exact yield ValidationMetrics.Bounds(b, e)
+    val tQuasar = q.earliestDelay.map(_.value)
+    val hit = mabossHitting(path, goal)
+    val q25 = hit.flatMap(_.quantiles.collectFirst { case (0.25, Some(t)) => t })
+    val delayGap = for _ <- hit; t25 <- q25; tr <- tQuasar yield t25 - tr
+    val overlap = hit.map(h =>
+      ValidationMetrics.jaccard(q.scenario.map(_.automaton).toSet, h.nodeActivation.keySet)
+    )
+    ValidationReport(
+      binf,
+      exact,
+      bounds.map(_.sound()),
+      bounds.map(_.tightness),
+      bounds.map(_.relGap),
+      tQuasar,
+      delayGap,
+      overlap,
+      if hit.isDefined then "maboss" else "none"
+    )
+
   private val validateCmd =
-    Opts.subcommand("validate", "QUASAR vs oracle exact (justesse + finesse)") {
+    Opts.subcommand(
+      "validate",
+      "rapport de validation consolidé (M2 : justesse/finesse/délai/scénario)"
+    ) {
       (
         Opts.argument[String]("model"),
         Opts.option[String]("goal", "objectif a=j"),
@@ -56,43 +111,45 @@ object BenchCommands:
           yield (net, goal)) match
             case Left(c) => c
             case Right((net, goal)) =>
-              val ctx = net.metadata.initial.getOrElse(Context.empty)
-              val r = Reachability.analyze(net, ctx, goal)
-              val q = Quantitative.analyze(net, ctx, goal)
-              val exact = r.uaReachable // recherche de cône exacte
-              val sound = !(r.uaReachable && !exact) && !(exact && !r.oaReachable)
-              val tight = r.oaReachable == exact
+              val rep = buildReport(net, path, goal)
               if json then
                 Console.emitJson(
                   Json.obj(
                     "model" -> Json.str(path),
                     "goal" -> Json.str(goal.toString),
-                    "sound" -> Json.bool(sound),
-                    "tight" -> Json.bool(tight),
-                    "probLowerBound" -> Json.opt(q.probLowerBound.map(b => Json.num(b.value)))
+                    "soundness" -> Json.opt(rep.soundness.map(Json.bool)),
+                    "tightness" -> Json.opt(rep.tightness.map(Json.num)),
+                    "relGap" -> Json.opt(rep.relGap.map(Json.num)),
+                    "binf" -> Json.opt(rep.binf.map(Json.num)),
+                    "exact" -> Json.opt(rep.exact.map(Json.num)),
+                    "tDelay" -> Json.opt(rep.tQuasar.map(Json.num)),
+                    "delayGap" -> Json.opt(rep.delayGap.map(Json.num)),
+                    "scenarioOverlap" -> Json.opt(rep.scenarioOverlap.map(Json.num)),
+                    "oracle" -> Json.str(rep.oracle)
                   )
                 )
               else
-                Console.out(s"Modèle  : $path")
-                Console.out(s"Objectif: $goal")
-                Console.out(s"Justesse: ${if sound then "✓" else "✗ BUG"}")
-                Console.out(s"Finesse : ${if tight then "OA = exact (optimal)" else "OA lâche"}")
-                q.probLowerBound.foreach(b => Console.out(f"P(R) ≥ ${b.value}%.6g  (QUASAR)"))
-                mabossOracle(path, goal).foreach(Console.out)
-              if sound then 0 else 1
+                Console.out(s"Modèle   : $path")
+                Console.out(s"Objectif : $goal")
+                Console.out(
+                  s"Justesse : ${rep.soundness
+                      .map(b => if b then "✓ binf ≤ exact" else "✗ VIOLATION")
+                      .getOrElse("? (exact indisponible)")}"
+                )
+                rep.tightness.foreach(t =>
+                  Console.out(
+                    f"Finesse  : tightness=$t%.4f (relGap=${rep.relGap.getOrElse(0.0)}%.4f)"
+                  )
+                )
+                (rep.binf, rep.exact) match
+                  case (Some(b), Some(e)) => Console.out(f"P(R)     : binf=$b%.6g  exact=$e%.6g")
+                  case _ => rep.binf.foreach(b => Console.out(f"P(R)     : binf=$b%.6g"))
+                Console.out(s"Oracle   : ${rep.oracle}")
+                rep.delayGap.foreach(d => Console.out(f"Délai    : gap(q25 − T(R))=$d%.4g"))
+                rep.scenarioOverlap.foreach(o => Console.out(f"Scénario : recouvrement=$o%.3f"))
+              if rep.soundness.forall(identity) then 0 else 1
         }
     }
-
-  /** Confronte à MaBoSS si le binaire est présent et le modèle au format `.bnd`. */
-  private def mabossOracle(path: String, goal: LocalState): Option[String] =
-    if !path.toLowerCase.endsWith(".bnd") then None
-    else if MaBossAdapter.status() == ToolStatus.Missing then
-      Some("P(R) MaBoSS : (binaire absent — oracle non exécuté)")
-    else
-      val cfg = path.replaceAll("(?i)\\.bnd$", ".cfg")
-      MaBossAdapter.probabilityOf(path, cfg, goal.automaton) match
-        case Left(e) => Some(s"P(R) MaBoSS : erreur ($e)")
-        case Right(rep) => rep.probability.map(p => f"P(R) = $p%.6g  (MaBoSS, oracle)")
 
   private val runCmd = Opts.subcommand("run", "suite: small|all") {
     Opts.argument[String]("suite").map { suite => () =>
