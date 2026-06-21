@@ -5,6 +5,21 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Temps d'atteinte MaBoSS (fiche V1) — débloque H2/H4
+
+- **io/MaBossOutput.Series** : parse la **série temporelle** complète du probtraj
+  (toutes les lignes), avec dérivés purs — CDF marginale d'un nœud dans le temps,
+  **premier passage**, **quantiles** de temps d'atteinte, et **temps d'activation
+  par nœud** (support du recouvrement de trajectoire).
+- **verify/MaBossAdapter.hittingTime** : lance MaBoSS (surcharge `sample_count` /
+  `max_time` via un `-c` additionnel) et renvoie `MaBossHitting` (prob, CDF,
+  quantiles, activations).
+- **cli** : `verify maboss <m> --goal … [--samples N] [--max-time T] [--json]`
+  (JSON `{prob, binf, sound, quantiles, hittingTimeCdf, nodeActivation}`) —
+  débloque **H2** (délai vs quantile) et **H4** (recouvrement scénario↔oracle).
+- **Tests** : parseSeries (grille, CDF), premier passage & quantiles, temps
+  d'activation par nœud (sans binaire, sur fixture probtraj).
+
 ### Valuation des modèles qualitatifs (fiche P1)
 
 - **analysis/Transform.assignRates** : assigne une distribution exponentielle à

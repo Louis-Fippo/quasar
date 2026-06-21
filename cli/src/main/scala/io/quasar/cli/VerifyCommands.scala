@@ -53,35 +53,75 @@ object VerifyCommands:
     }
   }
 
-  private val mabossCmd = Opts.subcommand("maboss", "oracle MaBoSS vs borne QUASAR") {
-    (modelArg, goalOpt).mapN { (path, g) => () =>
-      if !reportStatus("MaBoSS", MaBossAdapter.status()) then 2
-      else if !path.toLowerCase.endsWith(".bnd") then Console.fail("fournir le fichier .bnd MaBoSS")
-      else
-        (for net <- Console.loadModel(path); gl <- goal(g) yield (net, gl)) match
-          case Left(c) => c
-          case Right((net, gl)) =>
-            val cfg = path.replaceAll("(?i)\\.bnd$", ".cfg")
-            val binf = io.quasar.analysis.Quantitative
-              .analyze(
-                net,
-                net.metadata.initial.getOrElse(Context.empty),
-                gl
-              )
-              .probLowerBound
-              .map(_.value)
-              .getOrElse(0.0)
-            MaBossAdapter.probabilityOf(path, cfg, gl.automaton) match
-              case Left(e) => Console.fail(e)
-              case Right(rep) =>
-                val pOracle = rep.probability.getOrElse(0.0)
-                val sound = binf <= pOracle + 1e-9
-                Console.out(f"QUASAR  binf P(R) = $binf%.6g")
-                Console.out(f"MaBoSS  P(R)      = $pOracle%.6g")
-                Console.out(s"Justesse (binf ≤ P_oracle) : ${if sound then "✓" else "✗ VIOLATION"}")
-                if sound then 0 else 1
+  private val mabossCmd = Opts.subcommand("maboss", "oracle MaBoSS + temps d'atteinte (V1)") {
+    val samplesOpt = Opts.option[Int]("samples", "nombre de trajectoires MaBoSS").orNone
+    val maxTimeOpt = Opts.option[Double]("max-time", "horizon temporel MaBoSS").orNone
+    val jsonOpt = Opts.flag("json", "sortie machine (JSON)").orFalse
+    (modelArg, goalOpt, samplesOpt, maxTimeOpt, jsonOpt).mapN {
+      (path, g, samples, maxTime, json) => () =>
+        if !reportStatus("MaBoSS", MaBossAdapter.status()) then 2
+        else if !path.toLowerCase.endsWith(".bnd") then
+          Console.fail("fournir le fichier .bnd MaBoSS")
+        else
+          (for net <- Console.loadModel(path); gl <- goal(g) yield (net, gl)) match
+            case Left(c) => c
+            case Right((net, gl)) =>
+              val cfg = path.replaceAll("(?i)\\.bnd$", ".cfg")
+              val binf = io.quasar.analysis.Quantitative
+                .analyze(net, net.metadata.initial.getOrElse(Context.empty), gl)
+                .probLowerBound
+                .map(_.value)
+                .getOrElse(0.0)
+              MaBossAdapter.hittingTime(path, cfg, gl.automaton, samples, maxTime) match
+                case Left(e) => Console.fail(e)
+                case Right(h) =>
+                  val sound = binf <= h.prob + 1e-9
+                  if json then emitHittingJson(g, binf, sound, samples, maxTime, h)
+                  else printHitting(g, binf, sound, h)
+                  if sound then 0 else 1
     }
   }
+
+  private def emitHittingJson(
+      g: String,
+      binf: Double,
+      sound: Boolean,
+      samples: Option[Int],
+      maxTime: Option[Double],
+      h: MaBossHitting
+  ): Int =
+    Console.emitJson(
+      Json.obj(
+        "goal" -> Json.str(g),
+        "node" -> Json.str(h.node),
+        "samples" -> Json.opt(samples.map(Json.int)),
+        "maxTime" -> Json.opt(maxTime.map(Json.num)),
+        "prob" -> Json.num(h.prob),
+        "binf" -> Json.num(binf),
+        "sound" -> Json.bool(sound),
+        "quantiles" -> Json.obj(
+          h.quantiles.map((q, t) => q.toString -> Json.opt(t.map(Json.num)))*
+        ),
+        "hittingTimeCdf" -> Json.arr(
+          h.times
+            .zip(h.cdf)
+            .map((t, p) => Json.obj("time" -> Json.num(t), "prob" -> Json.num(p)))
+            .toList
+        ),
+        "nodeActivation" -> Json.obj(
+          h.nodeActivation.toList.sortBy(_._2).map((n, t) => n -> Json.num(t))*
+        )
+      )
+    )
+
+  private def printHitting(g: String, binf: Double, sound: Boolean, h: MaBossHitting): Unit =
+    Console.out(f"QUASAR  binf P(R) = $binf%.6g")
+    Console.out(f"MaBoSS  P($g)     = ${h.prob}%.6g")
+    Console.out(s"Justesse (binf ≤ P_oracle) : ${if sound then "✓" else "✗ VIOLATION"}")
+    val qs = h.quantiles
+      .map((q, t) => f"q${(q * 100).toInt}=${t.map(v => f"$v%.3g").getOrElse("∞")}")
+      .mkString("  ")
+    Console.out(s"Temps d'atteinte (quantiles) : $qs")
 
   private val fallbackCmd = Opts.subcommand("fallback", "statique puis bascule externe") {
     (modelArg, goalOpt).mapN { (path, g) => () =>

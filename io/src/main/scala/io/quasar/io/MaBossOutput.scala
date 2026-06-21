@@ -16,6 +16,61 @@ object MaBossOutput:
     def probActive(node: String): Double =
       states.iterator.collect { case (s, p) if s.contains(node) => p }.sum
 
+  /**
+   * Série temporelle du probtraj : pour chaque pas de temps, la distribution d'états. Base des
+   * **temps d'atteinte** (H2) et du **recouvrement de trajectoire** (H4) — fiche V1.
+   */
+  final case class Series(steps: Vector[(Double, Distribution)]):
+    /** Grille de temps. */
+    def times: Vector[Double] = steps.map(_._1)
+
+    /** Probabilité marginale que `node` soit actif à chaque pas de temps. */
+    def marginal(node: String): Vector[Double] = steps.map(_._2.probActive(node))
+
+    /** Probabilité que `node` soit actif au temps final. */
+    def finalProb(node: String): Double =
+      steps.lastOption.map(_._2.probActive(node)).getOrElse(0.0)
+
+    /**
+     * Premier temps où `P(node actif) ≥ level` (proxy du premier passage). `None` si le seuil n'est
+     * jamais atteint sur l'horizon simulé.
+     */
+    def firstPassage(node: String, level: Double): Option[Double] =
+      steps.collectFirst { case (t, d) if d.probActive(node) >= level => t }
+
+    /** Quantiles de temps d'atteinte : pour `q`, le 1er temps où la CDF marginale ≥ `q`. */
+    def quantiles(node: String, qs: Seq[Double]): Vector[(Double, Option[Double])] =
+      qs.toVector.map(q => q -> firstPassage(node, q))
+
+    /** Tous les nœuds apparaissant dans la série. */
+    def nodes: Set[String] = steps.iterator.flatMap(_._2.states.keysIterator.flatten).toSet
+
+    /**
+     * Nœuds activés le long de la trajectoire dominante, avec leur temps de 1ère activation
+     * (`P(actif) ≥ level`) — support du recouvrement de scénario (H4).
+     */
+    def activationTimes(level: Double): Map[String, Double] =
+      nodes.flatMap(n => firstPassage(n, level).map(n -> _)).toMap
+
+  /** Parse toute la série temporelle (toutes les lignes de données) du probtraj (fiche V1). */
+  def parseSeries(text: String): IoResult[Series] =
+    val lines = text.linesIterator.filter(_.trim.nonEmpty).toList
+    lines match
+      case Nil => Left(IoError("probtraj vide"))
+      case header :: rest =>
+        val cols = header.split("\t", -1).map(_.trim)
+        val firstStat = cols.indexWhere(_.equalsIgnoreCase("State"))
+        if firstStat < 0 then Left(IoError("colonne 'State' absente du probtraj"))
+        else if rest.isEmpty then Left(IoError("probtraj sans ligne de données"))
+        else
+          val parsed = rest.map { row =>
+            val time = row.split("\t", -1).headOption.flatMap(_.trim.toDoubleOption).getOrElse(0.0)
+            parseRow(row, firstStat).map(d => time -> d)
+          }
+          parsed.collectFirst { case Left(e) => e } match
+            case Some(e) => Left(e)
+            case None => Right(Series(parsed.collect { case Right(s) => s }.toVector))
+
   def parseProbtraj(text: String): IoResult[Distribution] =
     val lines = text.linesIterator.filter(_.trim.nonEmpty).toList
     lines match
