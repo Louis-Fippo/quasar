@@ -57,10 +57,27 @@ object StormAdapter:
         VerifyReport(binary, prob.map(_ > 0), prob, txt)
       }
 
+/**
+ * Distribution des temps d'atteinte MaBoSS (fiche V1) — débloque H2 (délai vs quantile) et H4
+ * (recouvrement de trajectoire).
+ */
+final case class MaBossHitting(
+    node: String,
+    prob: Double,
+    times: Vector[Double],
+    cdf: Vector[Double],
+    quantiles: Vector[(Double, Option[Double])],
+    nodeActivation: Map[String, Double],
+    raw: String
+)
+
 /** Adaptateur MaBoSS (simulation CTMC, oracle empirique, §7.6). */
 object MaBossAdapter:
 
   val binary = "MaBoSS"
+
+  /** Niveaux de quantiles de temps d'atteinte rapportés par défaut. */
+  val quantileLevels: Vector[Double] = Vector(0.1, 0.25, 0.5, 0.75, 0.9)
 
   def status(): ToolStatus = ExternalTool.detect(binary, List("--version"))
 
@@ -86,6 +103,51 @@ object MaBossAdapter:
               val p = dist.probActive(node)
               Right(VerifyReport(binary, Some(p > 0), Some(p), out.stdout + out.stderr))
     }
+
+  /**
+   * Lance MaBoSS et extrait la **distribution des temps d'atteinte** de `node` (fiche V1) : CDF
+   * marginale dans le temps, quantiles, et temps d'activation par nœud (pour H4). `samples` et
+   * `maxTime` surchargent le `.cfg` (via un `-c` de surcharge), sans le modifier.
+   */
+  def hittingTime(
+      bndPath: String,
+      cfgPath: String,
+      node: String,
+      samples: Option[Int] = None,
+      maxTime: Option[Double] = None
+  ): Either[String, MaBossHitting] =
+    val prefix = ExternalTool.tempFile("", "").getAbsolutePath
+    val cfgArgs = overrideCfg(samples, maxTime) match
+      case Some(extra) => List("-c", cfgPath, "-c", extra)
+      case None => List("-c", cfgPath)
+    ExternalTool.run(List(binary) ++ cfgArgs ++ List("-o", prefix, bndPath)).flatMap { out =>
+      findProbtraj(prefix) match
+        case None => Left(s"sortie probtraj introuvable (préfixe $prefix)")
+        case Some(file) =>
+          MaBossOutput.parseSeries(Files.readString(file.toPath)) match
+            case Left(e) => Left(e.toString)
+            case Right(series) =>
+              Right(
+                MaBossHitting(
+                  node = node,
+                  prob = series.finalProb(node),
+                  times = series.times,
+                  cdf = series.marginal(node),
+                  quantiles = series.quantiles(node, quantileLevels),
+                  nodeActivation = series.activationTimes(0.5),
+                  raw = out.stdout + out.stderr
+                )
+              )
+    }
+
+  /** Fichier `.cfg` de surcharge (sample_count / max_time), ou `None` si rien à surcharger. */
+  private def overrideCfg(samples: Option[Int], maxTime: Option[Double]): Option[String] =
+    if samples.isEmpty && maxTime.isEmpty then None
+    else
+      val sb = new StringBuilder
+      samples.foreach(n => sb.append(s"sample_count = $n;\n"))
+      maxTime.foreach(t => sb.append(s"max_time = $t;\n"))
+      Some(ExternalTool.tempFile(sb.toString, ".cfg").getAbsolutePath)
 
   /** Localise le fichier `*probtraj*` produit pour ce préfixe. */
   private def findProbtraj(prefix: String): Option[java.io.File] =
