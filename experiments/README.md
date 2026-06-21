@@ -74,14 +74,17 @@ n'est implémentée dans le notebook** ; elles sont décrites pour décision :
 | **M1** | options globales `--json` et `--cache-dir` | repro / cache CLI |
 | **M2** | `quasar bench validate … --json` → `{soundness, tightness, delay_gap, scenario_overlap}` | rapport H1–H4 |
 
-## Note d'environnement
+## Note d'environnement (rendu des figures)
 
-Le rendu **matplotlib** peut être défaillant sur certaines installations locales
-(blocage de `Figure.draw` tous backends confondus, indépendant de QUASAR). Les
-cellules de figures sont donc rendues dans un **processus isolé avec timeout** :
-si le rendu échoue, la cellule affiche et exporte les **données** (`figN_data.csv`)
-et le signale, sans bloquer ni fabriquer d'image. Les figures se génèrent
-normalement sur l'image CoLoMoTo.
+Sur certaines installations (numpy adossé à **MKL**), `numpy.dot` — utilisé par
+les transforms de matplotlib — peut se bloquer à cause d'un deadlock du runtime
+de threads MKL. Le notebook **corrige** ce point en positionnant
+`MKL_THREADING_LAYER=SEQUENTIAL` **avant** l'import de numpy (Section 0). Les 4
+figures sont donc rendues normalement (PNG dans `figures/` + affichage inline).
+
+Par sécurité, le rendu reste exécuté dans un **processus isolé avec timeout** :
+si matplotlib échouait malgré tout, la cellule afficherait et exporterait les
+**données** (`figN_data.csv`) sans bloquer ni fabriquer d'image.
 
 ## Acquisition des modèles externes
 

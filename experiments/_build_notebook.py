@@ -47,7 +47,12 @@ md(r"""
 """)
 
 code(r"""
-import os, sys, json, time, shutil, subprocess, platform, re, textwrap
+import os
+# Évite un deadlock du runtime de threads MKL sur `numpy.dot` (utilisé par les
+# transforms matplotlib) : doit être positionné AVANT l'import de numpy.
+os.environ.setdefault("MKL_THREADING_LAYER", "SEQUENTIAL")
+
+import sys, json, time, shutil, subprocess, platform, re, textwrap
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -681,10 +686,16 @@ display(df3)
 def _draw3():
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(df3["automates"], df3["t_QUASAR (s)"], "o-", color="tab:blue", label="QUASAR")
-    ax.set_xlabel("# automates"); ax.set_ylabel("temps (s)")
-    ax.set_title("H5 — temps QUASAR vs taille (modèles disponibles)")
-    ax.legend(fontsize=8)
+    # nuage de points (plusieurs objectifs partagent une même taille) — pas de
+    # ligne trompeuse ; sur ces petits modèles le temps est dominé par le
+    # démarrage JVM (~0.5 s), d'où l'absence de tendance d'échelle exploitable.
+    ax.scatter(df3["automates"], df3["t_QUASAR (s)"], c="tab:blue", s=60, zorder=3)
+    for _, r in df3.iterrows():
+        ax.annotate(r["modèle"], (r["automates"], r["t_QUASAR (s)"]),
+                    textcoords="offset points", xytext=(6, 3), fontsize=7)
+    ax.set_xlabel("# automates"); ax.set_ylabel("temps QUASAR (s)")
+    ax.set_ylim(0, max(0.1, float(df3["t_QUASAR (s)"].max()) * 1.3))
+    ax.set_title("H5 — temps QUASAR vs taille (dominé par le démarrage JVM)")
     fig.tight_layout(); fig.savefig(FIG / "fig3_scalabilite.png", dpi=130)
 
 _p = FIG / "fig3_scalabilite.png"
