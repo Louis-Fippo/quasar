@@ -35,3 +35,16 @@ class ConsoleSuite extends munit.FunSuite:
     Console.cachedRun(Seq("k"))(body())
     assertEquals(calls, 2) // chaque appel recalcule
   }
+
+  test("--format auto = auto-détection (route .bnet vers bioLQM)") {
+    val f = Files.createTempFile("quasar-fmt-", ".bnet")
+    Files.writeString(f, "targets, factors\nA, B\nB, A\n")
+    try
+      val viaAuto = Console.load(f.toString, Some("auto"))
+      val viaNone = Console.load(f.toString, None)
+      assert(viaAuto.isRight, s"--format auto a échoué : $viaAuto")
+      assert(viaNone.isRight, s"auto-détection a échoué : $viaNone")
+      // les deux voies donnent le même réseau (mêmes automates)
+      assertEquals(viaAuto.toOption.map(_.automata.keySet), viaNone.toOption.map(_.automata.keySet))
+    finally Files.deleteIfExists(f)
+  }
