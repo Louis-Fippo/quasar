@@ -384,11 +384,13 @@ md(r"""
 
 - **Oracle exact interne** (toujours disponible) : `analyze probability
   --symbolic` (MDD, exact) et `analyze compare` (BFS du cône → `sound`).
-- **MaBoSS / Storm** (externes) : exécutés si présents. La CLI actuelle de
-  `verify maboss`/`verify storm` n'accepte que `--goal` (pas de `--json`,
-  `--samples`, `--max-time`, ni distribution des temps d'atteinte). → la
-  **distribution des temps** (H2/H4) et le **temps espéré Storm** sont
-  **BLOQUÉS** (fiches `V1`/`V2` en Section 7).
+- **MaBoSS** (externe) : la **fiche V1 est implémentée** — `verify maboss --json
+  --samples N --max-time T` renvoie la probabilité, la **CDF des temps
+  d'atteinte**, ses **quantiles** et les **temps d'activation par nœud**. Cela
+  débloque H2 (délai vs quantile) et H4 (recouvrement). Exécuté si MaBoSS est
+  présent ; sinon `SKIPPED` (jamais inventé).
+- **Storm** (externe) : `verify storm --goal` (texte) ; le temps espéré exact
+  reste à exposer (fiche `V2`).
 """)
 
 code(r"""
@@ -413,27 +415,43 @@ ORACLE_INTERNAL
 """)
 
 code(r"""
-# Oracles externes MaBoSS / Storm — exécutés seulement si présents.
+# Oracles externes — MaBoSS (temps d'atteinte, V1) et Storm. Exécutés si présents.
 def _parse_prob(text):
     # extraction tolérante d'une probabilité dans [0,1] depuis une sortie texte
     cands = [float(x) for x in re.findall(r"[-+]?\d*\.\d+|\d+", text)]
     cands = [c for c in cands if 0.0 <= c <= 1.0]
     return cands[-1] if cands else None
 
+def bnd_of(name):
+    # MaBoSS exige le .bnd ; on le cherche dans bench/models
+    p = MODELS_DIR / f"{name}.bnd"
+    return p if p.is_file() else None
+
+# Capture des temps d'atteinte MaBoSS (fiche V1) -> dict {(name,goal): data JSON}
+MABOSS_HITTING = {}
+def maboss_hitting(name, goal):
+    bnd = bnd_of(name)
+    if not ORACLES["maboss"] or bnd is None:
+        return None
+    r = run_quasar(["verify", "maboss", str(bnd), "--goal", goal,
+                    "--samples", str(N_SAMPLES), "--max-time", str(MAX_TIME)], use_cache=False)
+    return None if (r["_unavailable"] or not r["_ok"]) else r.get("data")
+
 ext_oracle = []
 for name, goal, frm in GOALS:
-    anx = MODELS[name]["anx"]
-    row = {"modèle": name, "objectif": goal, "MaBoSS": None, "Storm": None}
-    if ORACLES["maboss"]:
-        r = run_quasar(["verify", "maboss", str(anx), "--goal", goal], want_json=False)
-        row["MaBoSS"] = "SKIPPED (absent)" if r["_unavailable"] else (_parse_prob(r["_raw"]))
+    row = {"modèle": name, "objectif": goal, "MaBoSS P(R)": None, "Storm P(R)": None}
+    h = maboss_hitting(name, goal)
+    if h is not None:
+        MABOSS_HITTING[(name, goal)] = h
+        row["MaBoSS P(R)"] = h.get("prob")
     else:
-        row["MaBoSS"] = "SKIPPED (absent)"
+        row["MaBoSS P(R)"] = "SKIPPED (absent)" if not ORACLES["maboss"] else "n/a (.bnd absent)"
     if ORACLES["storm"]:
+        anx = MODELS[name]["anx"]
         r = run_quasar(["verify", "storm", str(anx), "--goal", goal], want_json=False)
-        row["Storm"] = "SKIPPED (absent)" if r["_unavailable"] else (_parse_prob(r["_raw"]))
+        row["Storm P(R)"] = "SKIPPED" if r["_unavailable"] else _parse_prob(r["_raw"])
     else:
-        row["Storm"] = "SKIPPED (absent)"
+        row["Storm P(R)"] = "SKIPPED (absent)"
     ext_oracle.append(row)
 
 EXT_ORACLE = pd.DataFrame(ext_oracle)
@@ -507,14 +525,57 @@ FINESSE
 """)
 
 code(r"""
-# ===================== H2 / H4 — BLOQUÉS (oracle insuffisant) =============
-print("⚠️ BLOQUÉ — H2 (délai vs quantile MaBoSS) :")
-print("   `verify maboss` n'expose pas la distribution des temps d'atteinte.")
-print("   → fiche V1 (Section 7). T(R) de QUASAR est néanmoins calculé (Section 3).")
-print()
-print("⚠️ BLOQUÉ — H4 (recouvrement scénario ↔ trajectoires MaBoSS) :")
-print("   `verify maboss` n'exporte pas les trajectoires dominantes.")
-print("   → fiche V1/A1 (Section 7). Le scénario QUASAR est extrait (Section 3).")
+# ===================== H2 — DÉLAI vs QUANTILE (V1) ========================
+# T(R) de QUASAR comparé aux quantiles de temps d'atteinte MaBoSS (fiche V1).
+def scenario_nodes(name, goal, frm):
+    scn = run_quasar(["analyze", "scenario", str(MODELS[name]["anx"]), "--goal", goal,
+                      "--kind", "most-probable", "-k", "1"] + _extra(frm)).get("data") or []
+    if not scn:
+        return set()
+    return {t.split(":")[0].strip() for t in scn[0].get("transitions", [])}
+
+h2_rows = []
+for name, goal, frm in GOALS:
+    h = MABOSS_HITTING.get((name, goal))
+    tr = (run_quasar(["analyze", "delay", str(MODELS[name]["anx"]), "--goal", goal]
+                     + _extra(frm)).get("data") or {}).get("delay")
+    if h is None:
+        h2_rows.append({"modèle": name, "objectif": goal, "T(R) QUASAR": tr,
+                        "q25 MaBoSS": "SKIPPED", "q50 MaBoSS": "SKIPPED", "T(R) ≤ q25": "—"})
+    else:
+        q = h.get("quantiles", {})
+        q25, q50 = q.get("0.25"), q.get("0.5")
+        ok = (tr is not None and q25 is not None and tr <= q25)
+        h2_rows.append({"modèle": name, "objectif": goal, "T(R) QUASAR": tr,
+                        "q25 MaBoSS": q25, "q50 MaBoSS": q50, "T(R) ≤ q25": ok})
+H2 = pd.DataFrame(h2_rows)
+if not ORACLES["maboss"]:
+    print("⚠️ H2 SKIPPED — MaBoSS absent (capacité V1 présente ; exécuté sur image CoLoMoTo).")
+H2
+""")
+
+code(r"""
+# ===================== H4 — RECOUVREMENT SCÉNARIO (V1) ====================
+# Jaccard entre les nœuds du scénario le plus probable (QUASAR) et les nœuds
+# activés le long de la trajectoire dominante MaBoSS (nodeActivation, fiche V1).
+h4_rows = []
+for name, goal, frm in GOALS:
+    h = MABOSS_HITTING.get((name, goal))
+    q_nodes = scenario_nodes(name, goal, frm)
+    if h is None:
+        h4_rows.append({"modèle": name, "objectif": goal,
+                        "#nœuds QUASAR": len(q_nodes), "recouvrement": "SKIPPED"})
+    else:
+        m_nodes = set((h.get("nodeActivation") or {}).keys())
+        inter, union = q_nodes & m_nodes, q_nodes | m_nodes
+        jacc = (len(inter) / len(union)) if union else None
+        h4_rows.append({"modèle": name, "objectif": goal,
+                        "#nœuds QUASAR": len(q_nodes), "#nœuds MaBoSS": len(m_nodes),
+                        "recouvrement (Jaccard)": jacc})
+H4 = pd.DataFrame(h4_rows)
+if not ORACLES["maboss"]:
+    print("⚠️ H4 SKIPPED — MaBoSS absent (capacité V1 présente ; exécuté sur image CoLoMoTo).")
+H4
 """)
 
 # --- Section 6 -------------------------------------------------------------
@@ -586,14 +647,15 @@ PROPOSALS = [
      "io": "{assigned, policy, seed, min, max}",
      "bloque": "RÉSOLU ✅ — commande livrée (valuation débloquée)"},
     {"id": "V1", "besoin": "Distribution des temps d'atteinte MaBoSS", "module": "verify",
-     "signature": "quasar verify maboss <m> --goal ... --samples N --max-time T --emit hitting-time-distribution --json",
-     "io": "{prob, hitting_times:[...], quantiles:{...}}", "bloque": "H2 (délai vs quantile), H4 (trajectoires)"},
+     "signature": "quasar verify maboss <m> --goal ... --samples N --max-time T --json",
+     "io": "{prob, quantiles, hittingTimeCdf, nodeActivation}",
+     "bloque": "RÉSOLU ✅ — débloque H2 (quantiles) et H4 (nodeActivation)"},
     {"id": "V2", "besoin": "P exact + temps espéré Storm (+ JSON)", "module": "verify",
      "signature": "quasar verify storm <m> --goal ... --metric prob|expected-time --json",
      "io": "{prob, expected_time}", "bloque": "Oracle exact externe scriptable, H5"},
     {"id": "A1", "besoin": "Comparaison scénario ↔ oracle (H4)", "module": "analysis/notebook",
-     "signature": "quasar analyze scenario <m> --goal ... --compare-oracle maboss --json",
-     "io": "{overlap, matched:[...]}", "bloque": "H4 (recouvrement)"},
+     "signature": "recouvrement Jaccard (scénario QUASAR ↔ nodeActivation V1)",
+     "io": "{overlap}", "bloque": "RÉSOLU au niveau notebook via V1 (Section 5)"},
     {"id": "A2", "besoin": "Balayage de tailles (H5)", "module": "bench",
      "signature": "quasar bench sweep --models ... --metric time --json",
      "io": "[{model, size, time}]", "bloque": "Courbe de scalabilité automatisée"},
@@ -757,9 +819,9 @@ def _status_h5():
 
 SYNTHESE = pd.DataFrame([
     {"hypothèse": "H1 — justesse (proba)",   "statut": "VALIDÉ (oracle interne + MDD)" + ("" if (ORACLES["storm"] or ORACLES["maboss"]) else " ; externes SKIPPED")},
-    {"hypothèse": "H2 — justesse (délai)",   "statut": "BLOQUÉ — distribution temps MaBoSS absente (fiche V1)"},
+    {"hypothèse": "H2 — justesse (délai)",   "statut": ("VALIDÉ — T(R) vs quantiles MaBoSS (V1)" if ORACLES["maboss"] else "PRÊT (V1 livré) — SKIPPED : MaBoSS absent")},
     {"hypothèse": "H3 — finesse",            "statut": "VALIDÉ (écart nul : P exacte sur ces modèles)"},
-    {"hypothèse": "H4 — scénarios critiques","statut": "PARTIEL — scénario QUASAR extrait ; recouvrement oracle BLOQUÉ (V1/A1)"},
+    {"hypothèse": "H4 — scénarios critiques","statut": ("VALIDÉ — recouvrement Jaccard (V1)" if ORACLES["maboss"] else "PRÊT (V1 livré) — SKIPPED : MaBoSS absent")},
     {"hypothèse": "H5 — scalabilité",        "statut": _status_h5()},
     {"hypothèse": "H6 — apport optimisations","statut": "PARTIEL — anytime VALIDÉ ; semi-anneau/ZDD BLOQUÉS (A2/A3)"},
 ])

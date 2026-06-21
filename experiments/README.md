@@ -51,9 +51,9 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 | Hypothèse | Statut |
 |---|---|
 | **H1 — justesse (proba)** | ✅ VALIDÉ — assertion dure `binf ≤ exact` (oracle interne BFS + MDD) ; échoue bruyamment si violée |
-| **H2 — justesse (délai)** | ⚠️ BLOQUÉ — `verify maboss` n'expose pas la distribution des temps (fiche V1) |
+| **H2 — justesse (délai)** | ✅ PRÊT (fiche V1 livrée) — T(R) vs quantiles de temps d'atteinte MaBoSS ; exécuté si MaBoSS présent, sinon SKIPPED |
 | **H3 — finesse** | ✅ VALIDÉ — écart nul (P(R) calculée exactement sur ces modèles) |
-| **H4 — scénarios** | ⚠️ PARTIEL — scénario QUASAR extrait ; recouvrement oracle BLOQUÉ (V1/A1) |
+| **H4 — scénarios** | ✅ PRÊT (fiche V1 livrée) — recouvrement Jaccard scénario QUASAR ↔ nœuds activés MaBoSS ; SKIPPED si MaBoSS absent |
 | **H5 — scalabilité** | ⚠️ PARTIEL — modèles disponibles seulement (grands modèles non acquis) |
 | **H6 — optimisations** | ⚠️ PARTIEL — convergence anytime VALIDÉE ; ablation semi-anneau/ZDD BLOQUÉE (A2/A3) |
 
@@ -66,9 +66,9 @@ L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/
 |---|---|---|
 | **P0** | `pyquasar` (façade Python) — **livré** ; on garde le pilotage CLI par défaut | — |
 | **P1** | `quasar model assign-rates <m> --policy unit\|sample --seed N` — **livré ✅** | valuation des modèles qualitatifs (T helper / TCR / N2a) |
-| **V1** | `quasar verify maboss … --samples N --max-time T --emit hitting-time-distribution --json` | H2, H4 |
+| **V1** | `quasar verify maboss … --samples N --max-time T --json` — **livré ✅** (quantiles + nodeActivation) | H2, H4 |
 | **V2** | `quasar verify storm … --metric prob\|expected-time --json` | oracle exact externe scriptable |
-| **A1** | `quasar analyze scenario … --compare-oracle maboss --json` | H4 (recouvrement) |
+| **A1** | recouvrement H4 fait au niveau notebook via V1 (Jaccard) — **résolu** | H4 (recouvrement) |
 | **A2** | `quasar bench sweep --models … --metric time --json` | courbe H5 automatisée |
 | **A3** | options solveur `--semiring\|--anytime\|--cycle-policy` + `quasar bench ablation` | H6a / H6c |
 | **M1** | options globales `--json` et `--cache-dir` | repro / cache CLI |
