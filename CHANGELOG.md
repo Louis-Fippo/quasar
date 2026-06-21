@@ -5,6 +5,15 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Correctif : `model import --format auto`
+
+- **cli/Console.load** : `--format auto` (valeur par défaut documentée) est
+  désormais traité comme l'**auto-détection par extension** (normalisé en `None`)
+  au lieu de court-circuiter le routage bioLQM — `model import x.sbml --format
+  auto` (SBML-qual, GINML, BoolNet…) fonctionne à nouveau.
+- **Test** : `--format auto` route un `.bnet` vers bioLQM, à l'identique de
+  l'auto-détection.
+
 ### Options globales `--json` / `--cache-dir` (fiche M1)
 
 - **cli** : `--json` et `--cache-dir <dir>` reconnus en **tête** de ligne de
