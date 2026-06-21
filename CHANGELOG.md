@@ -5,6 +5,19 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Valuation des modèles qualitatifs (fiche P1)
+
+- **analysis/Transform.assignRates** : assigne une distribution exponentielle à
+  chaque transition selon une politique `RatePolicy` — `Unit` (taux 1.0) ou
+  `Sample(lo, hi)` (log-uniforme dans `[lo, hi]`, **déterministe** pour une graine
+  donnée). Taux strictement positifs (cohérents avec `Validation`) ; structure du
+  réseau inchangée. Débloque la valuation des modèles importés sans cinétique
+  (SBML-qual, BoolNet, GINML…).
+- **cli** : `model assign-rates <m> [--policy unit|sample] [--seed N] [--min] [--max]
+  [-o] [--json]` (JSON `{assigned, policy, seed, min, max}`).
+- **Tests** : politique unit (toutes à `exp(1.0)`), sample dans l'intervalle et
+  positives, déterminisme par graine, validation du modèle valué.
+
 ### Phase 0 — Squelette + boucle d'I/O
 
 - **Build** : projet `sbt` multi-modules (`core`, `io`, `analysis`, `cli`, `bench`),

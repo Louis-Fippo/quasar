@@ -254,6 +254,57 @@ object ModelCommands:
     }
   }
 
+  // --- assign-rates --------------------------------------------------------
+  private val assignRatesCmd =
+    Opts.subcommand("assign-rates", "assigne des taux (valuation des modèles qualitatifs)") {
+      val policyOpt =
+        Opts.option[String]("policy", "unit|sample (défaut: unit)").withDefault("unit")
+      val seedOpt = Opts.option[Int]("seed", "graine (policy sample)").withDefault(0)
+      val minOpt = Opts.option[Double]("min", "taux minimal (policy sample)").withDefault(0.1)
+      val maxOpt = Opts.option[Double]("max", "taux maximal (policy sample)").withDefault(10.0)
+      (modelArg, policyOpt, seedOpt, minOpt, maxOpt, outOpt, jsonOpt).mapN {
+        (path, policy, seed, lo, hi, out, json) => () =>
+          Console.loadModel(path) match
+            case Left(code) => code
+            case Right(net) =>
+              val parsed = policy.toLowerCase match
+                case "unit" => Right(Transform.RatePolicy.Unit)
+                case "sample" if lo > 0 && hi >= lo => Right(Transform.RatePolicy.Sample(lo, hi))
+                case "sample" => Left(s"intervalle invalide : --min $lo --max $hi (0 < min ≤ max)")
+                case other => Left(s"politique inconnue : $other (attendu unit|sample)")
+              parsed match
+                case Left(e) => Console.fail(e)
+                case Right(pol) =>
+                  val result = Transform.assignRates(net, pol, seed.toLong)
+                  val written = out match
+                    case Some(o) =>
+                      Exporter.toFile(result, o, Some(Format.Anx)).left.map(_.toString)
+                    case None => Right(())
+                  written match
+                    case Left(e) => Console.fail(e)
+                    case Right(_) =>
+                      if json then
+                        Console.emitJson(
+                          Json.obj(
+                            "assigned" -> Json.int(result.transitions.size),
+                            "policy" -> Json.str(policy.toLowerCase),
+                            "seed" -> Json.int(seed),
+                            "min" -> Json.num(lo),
+                            "max" -> Json.num(hi)
+                          )
+                        )
+                        0
+                      else
+                        out match
+                          case Some(o) =>
+                            Console.out(
+                              s"taux assignés (${result.transitions.size}, policy=$policy) -> $o"
+                            )
+                            0
+                          case None => Console.out(io.quasar.io.AnxFormat.render(result)); 0
+      }
+    }
+
   // --- biolqm --------------------------------------------------------------
   private val biolqmCmd = Opts.subcommand("biolqm", "projette en bioLQM et signale les pertes") {
     (modelArg, jsonOpt).mapN { (path, json) => () =>
@@ -287,4 +338,5 @@ object ModelCommands:
       .orElse(statsCmd)
       .orElse(diffCmd)
       .orElse(normalizeCmd)
+      .orElse(assignRatesCmd)
       .orElse(biolqmCmd)
