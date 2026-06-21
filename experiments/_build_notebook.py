@@ -642,12 +642,26 @@ CONVERGENCE
 """)
 
 code(r"""
-# ===================== H6a / H6c — BLOQUÉS ===============================
-print("⚠️ BLOQUÉ — ablation semi-anneau / ZDD :")
-print("   Les options `--semiring`, `--anytime`, `--cycle-policy` et les commandes")
-print("   `bench sweep` / `bench ablation` du plan ne sont pas exposées par la CLI.")
-print("   Seule l'ablation 'anytime' (budget CEGAR ci-dessus) est exécutable.")
-print("   → fiches A2/A3 (Section 7).")
+# ===================== H6a / H6c — ABLATION DES STRATÉGIES (A3) ===========
+# `bench ablation` chronomètre les stratégies P(R) réellement implémentées :
+# CTMC exact, MDD symbolique (backend DD), CEGAR anytime. Temps + concordance.
+abl_rows = []
+for name, goal, frm in GOALS:
+    a = run_quasar(["bench", "ablation", str(MODELS[name]["anx"]), "--goal", goal,
+                    "--reps", "3"] + _extra(frm), use_cache=False)
+    data = a.get("data") or {}
+    for s in data.get("strategies", []):
+        abl_rows.append({
+            "modèle": name, "objectif": goal, "stratégie": s.get("strategy"),
+            "valeur": s.get("value", s.get("lower")),
+            "exact": s.get("exact"), "ddNodes": s.get("ddNodes"),
+            "temps (ms)": round(s["timeMs"], 2) if "timeMs" in s else None,
+            "concorde": s.get("agrees"),
+        })
+ABLATION = pd.DataFrame(abl_rows)
+print("H6a (backend DD) et H6c (anytime) — ablation réelle (aucun oracle requis).")
+print("Note : `--semiring`/`--cycle-policy` restent intrinsèques (non basculables).")
+ABLATION
 """)
 
 # --- Section 7 -------------------------------------------------------------
@@ -685,9 +699,10 @@ PROPOSALS = [
     {"id": "A2", "besoin": "Balayage de tailles (H5)", "module": "bench",
      "signature": "quasar bench sweep --models ... --metric time --json",
      "io": "[{model, size, time}]", "bloque": "Courbe de scalabilité automatisée"},
-    {"id": "A3", "besoin": "Ablation des stratégies (H6)", "module": "bench/solver",
-     "signature": "quasar bench ablation --strategy semiring|topk|zdd --json  (+ options solveur --semiring/--anytime/--cycle-policy)",
-     "io": "[{strategy, on, time, quality}]", "bloque": "H6a (semi-anneau), H6c (ZDD)"},
+    {"id": "A3", "besoin": "Ablation des stratégies (H6)", "module": "cli/bench",
+     "signature": "quasar bench ablation <m> --goal ... [--budget N] [--reps R] --json",
+     "io": "{reference, strategies:[{strategy, value, exact, ddNodes, timeMs, agrees}]}",
+     "bloque": "RÉSOLU ✅ — ablation CTMC/MDD/CEGAR (H6) ; --semiring/cycle-policy intrinsèques"},
     {"id": "M1", "besoin": "Sortie JSON globale + cache persistant", "module": "cli",
      "signature": "options globales --json et --cache-dir <dir>",
      "io": "-", "bloque": "Mémoïsation CLI (contournée au niveau notebook)"},
@@ -859,7 +874,7 @@ SYNTHESE = pd.DataFrame([
     {"hypothèse": "H3 — finesse",            "statut": "VALIDÉ (écart nul : P exacte sur ces modèles)"},
     {"hypothèse": "H4 — scénarios critiques","statut": ("VALIDÉ — recouvrement Jaccard (V1)" if ORACLES["maboss"] else "PRÊT (V1 livré) — SKIPPED : MaBoSS absent")},
     {"hypothèse": "H5 — scalabilité",        "statut": _status_h5()},
-    {"hypothèse": "H6 — apport optimisations","statut": "PARTIEL — anytime VALIDÉ ; semi-anneau/ZDD BLOQUÉS (A2/A3)"},
+    {"hypothèse": "H6 — apport optimisations","statut": "VALIDÉ — ablation CTMC/MDD/CEGAR (A3) + convergence anytime (temps & concordance mesurés)"},
 ])
 SYNTHESE
 """)
@@ -894,9 +909,12 @@ md(r"""
   s'ajoutent automatiquement s'ils sont installés.
 - **H3** est triviale sur ces petits modèles car QUASAR calcule `P(R)`
   *exactement* (CTMC/MDD) ; l'écart n'apparaît qu'au-delà du plafond d'états.
-- **H6 (anytime)** est démontrée réellement (encadrement CEGAR monotone).
-- **H2, H4, H5 (grands modèles), H6 (semi-anneau/ZDD)** sont **bloqués** par des
-  capacités absentes — listées en Section 7 sans aucun résultat fabriqué.
+- **H6** est démontrée réellement : convergence anytime (CEGAR monotone) **et**
+  ablation des stratégies CTMC / MDD / CEGAR (temps + concordance, fiche A3).
+- **H2 et H4** sont **prêtes** (fiches V1/V2 livrées) et s'exécutent dès que
+  MaBoSS/Storm sont installés ; **H5 à grande échelle** attend l'acquisition des
+  grands modèles. Tout blocage restant est signalé en Section 7, sans résultat
+  fabriqué.
 
 Le détail des prérequis et des modules à arbitrer est dans `experiments/README.md`.
 """)

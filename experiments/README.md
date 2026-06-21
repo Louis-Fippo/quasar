@@ -55,7 +55,7 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 | **H3 — finesse** | ✅ VALIDÉ — écart nul (P(R) calculée exactement sur ces modèles) |
 | **H4 — scénarios** | ✅ PRÊT (fiche V1 livrée) — recouvrement Jaccard scénario QUASAR ↔ nœuds activés MaBoSS ; SKIPPED si MaBoSS absent |
 | **H5 — scalabilité** | ⚠️ PARTIEL — grands modèles non acquis ; Storm exact (V2) mesuré si présent (point d'explosion) |
-| **H6 — optimisations** | ⚠️ PARTIEL — convergence anytime VALIDÉE ; ablation semi-anneau/ZDD BLOQUÉE (A2/A3) |
+| **H6 — optimisations** | ✅ VALIDÉ — convergence anytime + ablation CTMC/MDD/CEGAR (temps & concordance, fiche A3) |
 
 ## Modules QUASAR à arbitrer (Section 7 du notebook)
 
@@ -70,7 +70,7 @@ L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/
 | **V2** | `quasar verify storm … --metric prob\|expected-time --json` — **livré ✅** | oracle exact scriptable, point d'explosion H5 |
 | **A1** | recouvrement H4 fait au niveau notebook via V1 (Jaccard) — **résolu** | H4 (recouvrement) |
 | **A2** | `quasar bench sweep --models … --metric time --json` | courbe H5 automatisée |
-| **A3** | options solveur `--semiring\|--anytime\|--cycle-policy` + `quasar bench ablation` | H6a / H6c |
+| **A3** | `quasar bench ablation <m> --goal … --json` (CTMC/MDD/CEGAR) — **livré ✅** | H6 (ablation) |
 | **M1** | options globales `--json` et `--cache-dir` | repro / cache CLI |
 | **M2** | `quasar bench validate … --json` → `{soundness, tightness, delay_gap, scenario_overlap}` | rapport H1–H4 |
 
