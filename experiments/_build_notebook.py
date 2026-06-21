@@ -284,21 +284,44 @@ md(r"""
 - **Modèles déjà valués** (p53-mdm2, cellfate) : taux importés tels quels
   (`.bnd/.cfg` MaBoSS ou ANX). Rien à faire.
 - **Modèles qualitatifs** (T helper, TCR, N2a) : nécessitent une assignation de
-  taux (voie 7.7b : taux unitaires, puis tirages contrôlés). **QUASAR n'expose
-  pas** de commande d'assignation/synthèse de taux (`model normalize` n'a que
-  `--booleanize`, pas `--infer-rates`). → **BLOQUÉ**, fiche `P1` en Section 7.
+  taux (voie 7.7b : taux unitaires, puis tirages contrôlés). La **fiche P1 est
+  désormais implémentée** : `quasar model assign-rates <m> --policy unit|sample
+  [--seed N] [--min] [--max]`. La valuation **n'est plus bloquée** — `unit` fixe
+  tous les taux à 1.0, `sample` tire des taux log-uniformes reproductibles
+  (analyse de sensibilité).
 """)
 
 code(r"""
-# Vérifie que les modèles présents sont bien valués ; signale le blocage pour les autres.
+# Valuation — fiche P1 IMPLÉMENTÉE (commande `model assign-rates`).
+def value_model(src_anx, out_anx, policy="unit", seed=0, lo=0.1, hi=10.0):
+    # value un modèle qualitatif (assigne des taux) -> écrit out_anx, renvoie le résumé JSON
+    return run_quasar(["model", "assign-rates", str(src_anx), "--policy", policy,
+                       "--seed", str(seed), "--min", str(lo), "--max", str(hi),
+                       "-o", str(out_anx)], use_cache=False)
+
+# Modèles présents : déjà valués.
 for name, m in MODELS.items():
     assert m["valued"], f"{name} non valué"
-print("✅ Modèles présents valués :", ", ".join(MODELS))
+print("✅ Modèles présents déjà valués :", ", ".join(MODELS))
 
-print("\n⚠️ BLOQUÉ — valuation des modèles qualitatifs externes :")
-print("   QUASAR n'a pas de commande d'assignation de taux.")
-print("   Proposition `quasar model assign-rates` → Section 7, fiche P1.")
-print("   Conséquence : les analyses sur", list(EXTERNAL), "restent en attente.")
+# Démonstration de la capacité P1 sur un modèle du dépôt :
+demo_out = EXP / "valued_demo.anx"
+vd = value_model(MODELS["multivalued-demo"]["anx"], demo_out, policy="unit").get("data") or {}
+val = (run_quasar(["model", "validate", str(demo_out)]).get("data") or {}).get("valid")
+print(f"✅ P1 RÉSOLU — `model assign-rates` : {vd.get('assigned')} taux assignés "
+      f"(policy={vd.get('policy')}) ; modèle valué valide = {val}")
+
+# Valuation automatique des modèles qualitatifs externes importés (s'il y en a) :
+valued_external = []
+for name in EXTERNAL:
+    src = EXP / f"{name}.anx"
+    if src.is_file():
+        out = EXP / f"{name}.valued.anx"
+        if value_model(src, out, policy="unit")["_ok"]:
+            valued_external.append(name)
+            MODELS[name] = {"palier": EXTERNAL[name]["palier"], "anx": out, "valued": True}
+print("Modèles externes valués (policy unit) :",
+      valued_external or "(aucun importé dans cet environnement)")
 """)
 
 # --- Section 3 -------------------------------------------------------------
@@ -558,9 +581,10 @@ PROPOSALS = [
      "statut": "RÉSOLU (façade `io.quasar.py.Quasar` livrée)",
      "decision": "On garde toutefois le pilotage CLI `--json` par défaut (repro)."},
     {"id": "P1", "besoin": "Assigner/synthétiser des taux (modèles qualitatifs)",
-     "module": "io/transform",
+     "module": "analysis/transform + cli",
      "signature": "quasar model assign-rates <m> --policy unit|sample --seed N -o <out>",
-     "io": "{assigned:int, policy, seed}", "bloque": "Valuation T helper/TCR/N2a (H1–H5 sur ces modèles)"},
+     "io": "{assigned, policy, seed, min, max}",
+     "bloque": "RÉSOLU ✅ — commande livrée (valuation débloquée)"},
     {"id": "V1", "besoin": "Distribution des temps d'atteinte MaBoSS", "module": "verify",
      "signature": "quasar verify maboss <m> --goal ... --samples N --max-time T --emit hitting-time-distribution --json",
      "io": "{prob, hitting_times:[...], quantiles:{...}}", "bloque": "H2 (délai vs quantile), H4 (trajectoires)"},

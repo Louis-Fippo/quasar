@@ -24,3 +24,5 @@ __pycache__/
 
 # Intermédiaires générés par le notebook d'expériences
 experiments/cellfate.anx
+experiments/valued_demo.anx
+experiments/*.valued.anx

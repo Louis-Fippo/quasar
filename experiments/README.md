@@ -59,13 +59,13 @@ notebook ; ré-exécution sans effet de bord). Graines et paramètres
 
 ## Modules QUASAR à arbitrer (Section 7 du notebook)
 
-L'expérience révèle des capacités requises mais absentes de la CLI. **Aucune
-n'est implémentée dans le notebook** ; elles sont décrites pour décision :
+L'expérience révèle des capacités requises mais absentes de la CLI. Sauf P0/P1
+(livrées), elles sont décrites pour décision :
 
 | Id | Proposition | Débloque |
 |---|---|---|
-| **P0** | `pyquasar` (façade Python) — **déjà livré** ; on garde le pilotage CLI par défaut | — |
-| **P1** | `quasar model assign-rates <m> --policy unit\|sample --seed N` | valuation T helper / TCR / N2a |
+| **P0** | `pyquasar` (façade Python) — **livré** ; on garde le pilotage CLI par défaut | — |
+| **P1** | `quasar model assign-rates <m> --policy unit\|sample --seed N` — **livré ✅** | valuation des modèles qualitatifs (T helper / TCR / N2a) |
 | **V1** | `quasar verify maboss … --samples N --max-time T --emit hitting-time-distribution --json` | H2, H4 |
 | **V2** | `quasar verify storm … --metric prob\|expected-time --json` | oracle exact externe scriptable |
 | **A1** | `quasar analyze scenario … --compare-oracle maboss --json` | H4 (recouvrement) |
@@ -90,5 +90,8 @@ si matplotlib échouait malgré tout, la cellule afficherait et exporterait les
 
 Les modèles qualitatifs du plan (T helper Naldi, Abou-Jaoudé 101, TCR, apoptose
 N2a) ne sont pas dans le dépôt. Pour les inclure : déposer leur SBML-qual dans
-`experiments/external/<nom>.sbml` puis ré-exécuter (la Section 1 les importe).
-Leur **valuation** reste bloquée tant que la fiche **P1** n'est pas implémentée.
+`experiments/external/<nom>.sbml` puis ré-exécuter (la Section 1 les importe). La
+Section 2 les **value automatiquement** via `model assign-rates --policy unit`
+(fiche P1, désormais implémentée) ; l'analyse de sensibilité utilise `--policy
+sample --seed N`. Reste seulement l'**acquisition** (téléchargement) à la charge
+de l'utilisateur.
