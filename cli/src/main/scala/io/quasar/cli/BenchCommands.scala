@@ -2,7 +2,15 @@ package io.quasar.cli
 
 import cats.syntax.all.*
 import com.monovore.decline.*
-import io.quasar.analysis.{Quantitative, Reachability}
+import io.quasar.analysis.{
+  QuantBracket,
+  QuantCegar,
+  QuantResult,
+  Quantitative,
+  Reachability,
+  SymbolicMdd
+}
+import io.quasar.core.Approx
 import io.quasar.core.ir.LocalState
 import io.quasar.core.ir.Context
 import io.quasar.verify.{MaBossAdapter, ToolStatus}
@@ -111,4 +119,123 @@ object BenchCommands:
     }
   }
 
-  val command: Opts[Run] = modelsCmd.orElse(validateCmd).orElse(runCmd)
+  // --- ablation (fiche A3) -------------------------------------------------
+  /** Temps minimal (ms) sur `reps` exécutions (réduit le bruit JIT/GC). */
+  private def timeMs(reps: Int)(body: => Unit): Double =
+    var best = Double.MaxValue
+    for _ <- 1 to math.max(1, reps) do
+      val t0 = System.nanoTime()
+      body
+      best = math.min(best, (System.nanoTime() - t0) / 1e6)
+    best
+
+  private val ablationCmd =
+    Opts.subcommand("ablation", "ablation des stratégies de calcul de P(R) (H6)") {
+      (
+        Opts.argument[String]("model"),
+        Opts.option[String]("goal", "objectif a=j"),
+        Opts.option[String]("from", "contexte initial").orNone,
+        Opts.option[Int]("budget", "budget CEGAR (anytime)").withDefault(256),
+        Opts.option[Int]("reps", "répétitions de mesure (min retenu)").withDefault(3),
+        Opts.flag("json", "JSON").orFalse
+      ).mapN { (path, g, frm, budget, reps, json) => () =>
+        val loaded = for
+          net <- Console.loadModel(path)
+          goal <- LocalState.parse(g).left.map(Console.fail)
+          ctx <- frm match
+            case Some(s) => Context.parse(s).left.map(Console.fail)
+            case None => Right(net.metadata.initial.getOrElse(Context.empty))
+        yield (net, goal, ctx)
+        loaded match
+          case Left(c) => c
+          case Right((net, goal, ctx)) =>
+            // Stratégie 1 — CTMC exact (matrice fondamentale), référence.
+            var q: QuantResult = null
+            val tCtmc = timeMs(reps) { q = Quantitative.analyze(net, ctx, goal) }
+            val ctmcVal = q.probLowerBound.map(_.value)
+            val ctmcExact = q.probLowerBound.exists(_.approx == Approx.Exact)
+            // Stratégie 2 — MDD symbolique (sans énumération d'états).
+            var mdd: Either[String, SymbolicMdd.ProbResult] = Left("non exécuté")
+            val tMdd = timeMs(reps) { mdd = SymbolicMdd.reachProbability(net, ctx, goal) }
+            // Stratégie 3 — CEGAR anytime (encadrement [lo, hi]).
+            var br: QuantBracket = null
+            val tCegar = timeMs(reps) { br = QuantCegar.bracket(net, ctx, goal, budget) }
+
+            val ref =
+              if ctmcExact then ctmcVal else mdd.toOption.map(_.reachProbability).orElse(ctmcVal)
+            def agree(v: Option[Double]): Boolean =
+              (for r <- ref; x <- v yield math.abs(x - r) <= 1e-6).getOrElse(false)
+            val cegarAgree = ref.exists(r => br.lower - 1e-9 <= r && r <= br.upper + 1e-9)
+
+            if json then
+              val strat = List(
+                Json.obj(
+                  "strategy" -> Json.str("ctmc-exact"),
+                  "value" -> Json.opt(ctmcVal.map(Json.num)),
+                  "exact" -> Json.bool(ctmcExact),
+                  "timeMs" -> Json.num(tCtmc),
+                  "agrees" -> Json.bool(agree(ctmcVal))
+                ),
+                mdd match
+                  case Right(r) =>
+                    Json.obj(
+                      "strategy" -> Json.str("mdd-symbolic"),
+                      "value" -> Json.num(r.reachProbability),
+                      "exact" -> Json.bool(true),
+                      "ddNodes" -> Json.int(r.mddNodes),
+                      "timeMs" -> Json.num(tMdd),
+                      "agrees" -> Json.bool(agree(Some(r.reachProbability)))
+                    )
+                  case Left(e) =>
+                    Json.obj(
+                      "strategy" -> Json.str("mdd-symbolic"),
+                      "note" -> Json.str(s"n/a : $e"),
+                      "timeMs" -> Json.num(tMdd)
+                    ),
+                Json.obj(
+                  "strategy" -> Json.str("cegar-anytime"),
+                  "lower" -> Json.num(br.lower),
+                  "upper" -> Json.num(br.upper),
+                  "width" -> Json.num(br.width),
+                  "exact" -> Json.bool(br.exact()),
+                  "budget" -> Json.int(budget),
+                  "timeMs" -> Json.num(tCegar),
+                  "agrees" -> Json.bool(cegarAgree)
+                )
+              )
+              Console.emitJson(
+                Json.obj(
+                  "model" -> Json.str(path),
+                  "goal" -> Json.str(goal.toString),
+                  "reps" -> Json.int(reps),
+                  "reference" -> Json.opt(ref.map(Json.num)),
+                  "strategies" -> Json.arr(strat)
+                )
+              )
+            else
+              Console.out(s"Ablation des stratégies P(R) — $path, but $goal")
+              Console.out(s"Référence (exacte) : ${ref.map(r => f"$r%.6g").getOrElse("?")}")
+              Console.out(
+                f"  ctmc-exact     ${fmtVal(ctmcVal, ctmcExact)}%-22s ${tCtmc}%8.2f ms  ${ok(agree(ctmcVal))}"
+              )
+              mdd match
+                case Right(r) =>
+                  Console.out(
+                    f"  mdd-symbolic   ${f"${r.reachProbability}%.6g (DD ${r.mddNodes})"}%-22s ${tMdd}%8.2f ms  ${ok(agree(Some(r.reachProbability)))}"
+                  )
+                case Left(e) =>
+                  Console.out(f"  mdd-symbolic   ${s"n/a : $e"}%-22s ${tMdd}%8.2f ms")
+              Console.out(
+                f"  cegar-anytime  ${f"[${br.lower}%.4g, ${br.upper}%.4g]"}%-22s ${tCegar}%8.2f ms  ${ok(cegarAgree)}"
+              )
+            0
+      }
+    }
+
+  private def fmtVal(v: Option[Double], exact: Boolean): String =
+    v.map(x => f"$x%.6g${if exact then "" else " (borne)"}").getOrElse("?")
+
+  private def ok(b: Boolean): String = if b then "✓" else "✗"
+
+  val command: Opts[Run] =
+    modelsCmd.orElse(validateCmd).orElse(runCmd).orElse(ablationCmd)

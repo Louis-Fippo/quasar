@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Ablation des stratégies P(R) (fiche A3) — débloque H6
+
+- **cli** : `bench ablation <m> --goal a=j [--from] [--budget N] [--reps R] [--json]`
+  exécute et **chronomètre** (min sur `reps`) les stratégies réellement
+  implémentées — **CTMC exact** (matrice fondamentale), **MDD symbolique** (sans
+  énumération), **CEGAR anytime** (encadrement `[lo,hi]`) — et rapporte temps +
+  valeur + concordance (et #nœuds DD). JSON `{reference, strategies:[…]}`.
+- Honnêteté : seules les stratégies disposant d'un chemin de code distinct sont
+  ablatées ; `--semiring`/`--cycle-policy` restent intrinsèques (non basculables).
+- **Tests** : invariant H6 — CTMC = MDD = (CEGAR encadre) sur une course à 1/2.
+
 ### Temps d'atteinte espéré Storm (fiche V2)
 
 - **io/StormFormat** : le modèle PRISM inclut désormais une récompense `"time"`
