@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Rapport de validation consolidé (fiche M2)
+
+- **analysis/ValidationMetrics** (pur, testé) : `Bounds(binf, exact)` →
+  `sound`/`tightness`/`relGap` ; `jaccard` (recouvrement de nœuds).
+- **cli** : `bench validate <m> --goal a=j --json` émet un rapport consolidé
+  `{soundness, tightness, relGap, binf, exact, tDelay, delayGap, scenarioOverlap,
+  oracle}` réunissant H1 (justesse), H3 (finesse), H2 (délai vs quantile MaBoSS)
+  et H4 (recouvrement scénario↔oracle). Champs oracle à `null` si MaBoSS absent.
+  Référence exacte = MDD symbolique (ou CTMC si déjà exacte).
+- **Tests** : métriques (exact/lâche/non-sûre/exact nul) et Jaccard.
+
 ### Balayage de scalabilité (fiche A2) — automatise la courbe H5
 
 - **cli** : `bench sweep [model…] [--dir D] [--metric reachability|fixpoints|load]
