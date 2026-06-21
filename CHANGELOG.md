@@ -5,6 +5,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Temps d'atteinte espéré Storm (fiche V2)
+
+- **io/StormFormat** : le modèle PRISM inclut désormais une récompense `"time"`
+  (1 par unité de temps) ; `parseResult` (pur, testé) extrait la valeur d'une
+  sortie Storm (`Result …: X`, `None` sur `inf`).
+- **verify/StormAdapter.expectedTime** : temps d'atteinte espéré exact via
+  `R{"time"}=? [ F goal ]` ; `probability` factorisée sur le même `query`.
+- **cli** : `verify storm <m> --goal … [--metric prob|expected-time] [--json]`
+  (JSON `{tool, goal, metric, prob, expectedTime}`).
+- **Tests** : présence de la récompense dans le PRISM, `parseResult`
+  (valeur / `inf` / absent).
+
 ### Temps d'atteinte MaBoSS (fiche V1) — débloque H2/H4
 
 - **io/MaBossOutput.Series** : parse la **série temporelle** complète du probtraj

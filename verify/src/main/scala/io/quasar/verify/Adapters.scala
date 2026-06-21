@@ -44,18 +44,26 @@ object StormAdapter:
   def status(): ToolStatus = ExternalTool.detect(binary)
 
   def probability(net: AutomataNetwork, goal: LocalState): Either[String, VerifyReport] =
-    val model = StormFormat.render(net, None)
-    val file = ExternalTool.tempFile(model, ".prism")
-    val prop = s"P=? [ F ${goal.automaton}=${goal.level} ]"
-    ExternalTool
-      .run(List(binary, "--prism", file.getAbsolutePath, "--prop", prop))
-      .map { out =>
-        val txt = out.stdout + out.stderr
-        val prob = """Result.*?:\s*([0-9.eE+-]+)""".r
-          .findFirstMatchIn(txt)
-          .flatMap(_.group(1).toDoubleOption)
-        VerifyReport(binary, prob.map(_ > 0), prob, txt)
-      }
+    query(net, s"P=? [ F ${StormFormat.varName(goal.automaton)}=${goal.level} ]").map {
+      (value, txt) => VerifyReport(binary, value.map(_ > 0), value, txt)
+    }
+
+  /**
+   * Temps d'atteinte **espéré** exact du but (fiche V2) via la récompense `"time"` du CTMC
+   * (`R{"time"}=? [ F goal ]`). `None` si le temps est infini (but non atteint p.s.).
+   */
+  def expectedTime(net: AutomataNetwork, goal: LocalState): Either[String, VerifyReport] =
+    query(net, s"""R{"time"}=? [ F ${StormFormat.varName(goal.automaton)}=${goal.level} ]""").map {
+      (value, txt) => VerifyReport(binary, None, value, txt)
+    }
+
+  /** Lance Storm sur le modèle PRISM avec une propriété et renvoie (valeur, sortie brute). */
+  private def query(net: AutomataNetwork, prop: String): Either[String, (Option[Double], String)] =
+    val file = ExternalTool.tempFile(StormFormat.render(net, None), ".prism")
+    ExternalTool.run(List(binary, "--prism", file.getAbsolutePath, "--prop", prop)).map { out =>
+      val txt = out.stdout + out.stderr
+      (StormFormat.parseResult(txt), txt)
+    }
 
 /**
  * Distribution des temps d'atteinte MaBoSS (fiche V1) — débloque H2 (délai vs quantile) et H4

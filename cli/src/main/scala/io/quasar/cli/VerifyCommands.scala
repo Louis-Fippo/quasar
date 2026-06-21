@@ -41,15 +41,40 @@ object VerifyCommands:
   }
 
   private val stormCmd = Opts.subcommand("storm", "vérification probabiliste exacte (Storm)") {
-    (modelArg, goalOpt).mapN { (path, g) => () =>
+    val metricOpt =
+      Opts.option[String]("metric", "prob|expected-time (défaut: prob)").withDefault("prob")
+    val jsonOpt = Opts.flag("json", "sortie machine (JSON)").orFalse
+    (modelArg, goalOpt, metricOpt, jsonOpt).mapN { (path, g, metric, json) => () =>
       if !reportStatus("Storm", StormAdapter.status()) then 2
       else
         (for net <- Console.loadModel(path); gl <- goal(g) yield (net, gl)) match
           case Left(c) => c
           case Right((net, gl)) =>
-            StormAdapter.probability(net, gl) match
+            val (kind, run) = metric.toLowerCase match
+              case "expected-time" | "expected_time" | "time" =>
+                ("expected-time", StormAdapter.expectedTime(net, gl))
+              case _ => ("prob", StormAdapter.probability(net, gl))
+            run match
               case Left(e) => Console.fail(e)
-              case Right(r) => Console.out(s"Storm : P(R) = ${r.probability.getOrElse("?")}"); 0
+              case Right(r) =>
+                val prob = if kind == "prob" then r.probability else None
+                val time = if kind == "expected-time" then r.probability else None
+                if json then
+                  Console.emitJson(
+                    Json.obj(
+                      "tool" -> Json.str("storm"),
+                      "goal" -> Json.str(g),
+                      "metric" -> Json.str(kind),
+                      "prob" -> Json.opt(prob.map(Json.num)),
+                      "expectedTime" -> Json.opt(time.map(Json.num))
+                    )
+                  )
+                else if kind == "expected-time" then
+                  Console.out(
+                    s"Storm : E[temps d'atteinte] = ${time.map(_.toString).getOrElse("∞")}"
+                  )
+                else Console.out(s"Storm : P(R) = ${prob.map(_.toString).getOrElse("?")}")
+                0
     }
   }
 
