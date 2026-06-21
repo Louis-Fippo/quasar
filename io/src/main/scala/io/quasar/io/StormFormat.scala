@@ -7,7 +7,9 @@ import io.quasar.core.ir.*
  *
  * Une variable par automate ; chaque transition devient une commande gardée de taux `meanRate`
  * mettant à jour la seule variable concernée (sémantique asynchrone, taux exponentiels — sémantique
- * concrète CTMC de QUASAR). Une propriété `P=? [ F goal ]` peut être ajoutée.
+ * concrète CTMC de QUASAR). Une propriété `P=? [ F goal ]` peut être ajoutée. Une récompense
+ * `"time"` (1 par unité de temps) est incluse pour le **temps d'atteinte espéré** (fiche V2,
+ * `R{"time"}=? [ F goal ]`).
  */
 object StormFormat:
 
@@ -27,10 +29,26 @@ object StormFormat:
       sb ++= s"  [] $guard -> ${t.rate} : (${id(au.name)}'=${t.to});\n"
     sb ++= "endmodule\n"
 
+    // Récompense de temps (CTMC) : accumule 1 par unité de temps -> temps espéré (V2).
+    sb ++= "\nrewards \"time\"\n  true : 1;\nendrewards\n"
+
     goal.foreach { g =>
       sb ++= s"\nP=? [ F ${id(g.automaton)}=${g.level} ]\n"
     }
     sb.toString
+
+  /** Nom de variable PRISM pour un automate (sanitisé). */
+  def varName(name: String): String = id(name)
+
+  /**
+   * Extrait la valeur numérique d'une sortie Storm (`Result (for initial states): X`). Renvoie
+   * `None` si le résultat est `inf`/`infinity` (p. ex. temps d'atteinte infini) ou absent.
+   */
+  def parseResult(text: String): Option[Double] =
+    """Result.*?:\s*([0-9.eE+-]+|inf(?:inity)?)""".r
+      .findFirstMatchIn(text)
+      .map(_.group(1))
+      .flatMap(s => if s.startsWith("inf") then None else s.toDoubleOption)
 
   private def id(s: String): String =
     if s.matches("[A-Za-z_][A-Za-z0-9_]*") then s else "_" + s.replaceAll("[^A-Za-z0-9_]", "_")

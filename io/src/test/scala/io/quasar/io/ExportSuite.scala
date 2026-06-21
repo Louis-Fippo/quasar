@@ -33,6 +33,21 @@ class ExportSuite extends munit.FunSuite:
     assert(prism.contains("P=? [ F a=1 ]"))
   }
 
+  test("export PRISM/Storm : récompense de temps (V2)") {
+    val prism = StormFormat.render(net, None)
+    assert(prism.contains("rewards \"time\""), prism)
+    assert(prism.contains("true : 1;"), prism)
+    assert(prism.contains("endrewards"), prism)
+  }
+
+  test("parseResult Storm : valeur, inf, absence") {
+    assertEquals(StormFormat.parseResult("Result (for initial states): 0.5"), Some(0.5))
+    assertEquals(StormFormat.parseResult("Result (for initial states): 3.25e0"), Some(3.25))
+    assertEquals(StormFormat.parseResult("Result (for initial states): inf"), None)
+    assertEquals(StormFormat.parseResult("Result (for initial states): infinity"), None)
+    assertEquals(StormFormat.parseResult("aucun résultat ici"), None)
+  }
+
   test("export DOT : graphe de régulation") {
     val dot = DotFormat.render(net)
     assert(dot.contains("digraph"))
