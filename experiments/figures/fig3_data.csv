@@ -1,0 +1,7 @@
+modèle,automates,états,t_QUASAR (s),statut
+multivalued-demo,2,6,0.0297,ok
+p53-mdm2,3,4,0.0301,ok
+cellfate,11,71,0.0843,ok
+tcr,40,1099511627776,2.427,ok
+thelper-naldi,65,>9e18 (débordement Long),10.2174,ok
+thelper-aboujaoude,101,,,explosion (OOM/timeout)
