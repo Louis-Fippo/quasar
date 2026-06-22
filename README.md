@@ -8,6 +8,36 @@ construire l'espace d'états**. Fondé sur l'interprétation abstraite, les Grap
 de Causalité Locale (Pint/Paulevé) et le Graphe de Causalité Locale Quantifié
 `⌈Gω_ς⌉` (chap. 4 de la thèse de L. Fippo Fitime).
 
+## Documentation
+
+La documentation complète vit dans [`docs/`](docs/) et se construit en site
+statique avec [MkDocs](https://www.mkdocs.org) :
+
+```bash
+mkdocs serve         # http://127.0.0.1:8000 (rendu live)
+mkdocs build         # site/ (HTML statique)
+```
+
+| Page | Contenu |
+|------|---------|
+| [Accueil](docs/index.md) | vue d'ensemble, capacités, garanties |
+| [Prise en main](docs/getting-started.md) | prérequis, build, premier modèle |
+| [Guide CLI](docs/usage.md) | référence exhaustive des commandes `quasar` |
+| [Conception](docs/conception.md) | architecture telle qu'implémentée |
+| [Bindings Python](docs/python.md) | `pyquasar` pour notebooks |
+| [Référence API](docs/api.md) | Scaladoc (`sbt docAll`) |
+
+## Capacités
+
+- **Atteignabilité** OA/UA + **exacte symbolique** (BDD/MDD) sans énumération.
+- **Quantitatif** : `P(R)` exacte (CTMC absorbante) ou borne inf. sound, délai
+  `T(R)`, temps moyen, scénarios top-k.
+- **Encadrement CEGAR** qualitatif et **quantitatif** `[lo, hi]` raffiné par budget.
+- **Topologie** (SCC, circuits signés, points fixes, attracteurs, trap-spaces),
+  **intervention** (cutsets, mutations), **transformations** (réduction, slice,
+  booléanisation, phase-type).
+- **I/O** large via **bioLQM** (SBML-qual, BoolNet, GINML…) + oracles externes.
+
 ## Build
 
 ```bash

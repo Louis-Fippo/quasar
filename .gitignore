@@ -32,3 +32,5 @@ experiments/external/*.sbml
 experiments/external/*.anx
 experiments/external/source/
 experiments/.acquire-cache/
+# Documentation générée (MkDocs)
+site/
