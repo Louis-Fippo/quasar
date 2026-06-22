@@ -1,0 +1,14 @@
+modèle,objectif,H1 (sound),P(R),exact,H3 (tightness),H6 (ablation),H2/H4
+phasetype-demo,g=1,✓,0.6666666666666666,True,1.0,✓,SKIP
+multivalued-demo,g=2,✓,0.9999999999998758,True,1.0,✓,SKIP
+p53-mdm2,p53=1,✓,1.0,True,1.0,✓,SKIP
+cellfate,Apoptosis=1,✓,0.5,True,1.0,✓,SKIP
+cellfate,Necrosis=1,✓,0.23437499999999997,True,1.0,✓,SKIP
+cellfate,Survival=1,✓,0.5,True,1.0,✓,SKIP
+tcr,CD45=1,✓,0.5,True,1.0,OOM,SKIP
+tcr,CD8=1,✓,0.5,True,1.0,OOM,SKIP
+thelper-naldi,APC=1,✓,0.5,True,1.0,OOM,SKIP
+thelper-naldi,CD28=1,✓,0.75,True,1.0,OOM,SKIP
+thelper-naldi,CGC=1,✓,1.0,True,1.0,OOM,SKIP
+thelper-aboujaoude,APC=1,✓,0.5,True,1.0,OOM,SKIP
+thelper-aboujaoude,CD28=1,✓,0.75,True,1.0,OOM,SKIP
