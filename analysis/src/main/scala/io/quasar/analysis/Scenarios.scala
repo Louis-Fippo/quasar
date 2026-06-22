@@ -40,10 +40,34 @@ object Scenarios:
       kind: Kind = Kind.MostProbable,
       maxExpansions: Int = 200_000
   ): List[Scenario] =
-    starts(net, ctx, goal)
-      .flatMap(s => search(net, goal, s, k, kind, maxExpansions))
+    // expansion phase-type (D4) : probabilités/délais corrects (compétition exacte) ;
+    // les états fantômes de l'expansion sont repliés dans le chemin affiché.
+    val expanded = Transform.expandPhaseType(net)
+    starts(expanded, ctx, goal)
+      .flatMap(s => search(expanded, goal, s, k, kind, maxExpansions))
+      .map(sc => sc.copy(transitions = collapsePhaseType(net, sc.transitions)))
       .sortBy(sc => if kind == Kind.Fastest then sc.delay else -sc.probability)
       .take(k)
+
+  /**
+   * Replie les sous-chaînes d'états fantômes (expansion phase-type) dans un chemin : une transition
+   * logique `a: from → to` éclatée en `from → φ₁ → … → to` est restituée sous sa forme d'origine
+   * (les niveaux fantômes ≥ |S(a)| du réseau original sont masqués). No-op sans phase-type.
+   */
+  private def collapsePhaseType(orig: AutomataNetwork, path: List[Transition]): List[Transition] =
+    val levels = orig.automata.view.mapValues(_.levels).toMap
+    def phantom(a: String, lvl: Int): Boolean = lvl >= levels.getOrElse(a, Int.MaxValue)
+    val pending = scala.collection.mutable.Map.empty[String, (Int, List[LocalState])]
+    val out = scala.collection.mutable.ListBuffer.empty[Transition]
+    for t <- path do
+      (phantom(t.automaton, t.from), phantom(t.automaton, t.to)) match
+        case (false, false) => out += t // transition réelle
+        case (false, true) => pending(t.automaton) = (t.from, t.conditions) // entrée de chaîne
+        case (true, true) => () // saut interne fantôme : masqué
+        case (true, false) => // sortie de chaîne : transition logique d'origine
+          val (rf, conds) = pending.remove(t.automaton).getOrElse((t.from, t.conditions))
+          out += Transition(t.automaton, rf, t.to, conds)
+    out.toList
 
   /**
    * Borne inférieure anytime de `P(R)` : somme des probabilités des `k` meilleures trajectoires
@@ -56,13 +80,15 @@ object Scenarios:
       k: Int = 64,
       maxExpansions: Int = 200_000
   ): Double =
-    val ss = starts(net, ctx, goal)
+    // expansion phase-type idempotente (sûre si l'appelant a déjà expansé).
+    val expanded = Transform.expandPhaseType(net)
+    val ss = starts(expanded, ctx, goal)
     if ss.isEmpty then 0.0
     else
       val perStart = ss.map { s =>
         math.min(
           1.0,
-          search(net, goal, s, k, Kind.MostProbable, maxExpansions).map(_.probability).sum
+          search(expanded, goal, s, k, Kind.MostProbable, maxExpansions).map(_.probability).sum
         )
       }
       perStart.sum / perStart.size

@@ -5,6 +5,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Correctif : `analyze scenario` & phase-type
+
+- **analysis/Scenarios.topK / anytimeLowerBound** : opéraient sur le réseau brut,
+  donc les probabilités/délais de scénarios étaient des approximations par taux
+  moyen sur les modèles phase-type. Correctif : `Transform.expandPhaseType`
+  appliqué (compétition exacte) ; les **états fantômes** de l'expansion sont
+  **repliés** dans le chemin affiché (`collapsePhaseType`) — la transition logique
+  `a: from → to` est restituée, no-op sans phase-type. Ex. `phasetype-demo` :
+  scénario `g:0→1` à `P=2/3` (au lieu de `0.5`).
+- **Test** : `ScenariosSuite` (compétition 2/3 + chemin replié sans niveau fantôme).
+
 ### Correctif (soundness) : CEGAR quantitatif & phase-type
 
 - **analysis/QuantCegar.bracket** : appliquait la chaîne de saut sur le réseau

@@ -58,3 +58,26 @@ class ScenariosSuite extends munit.FunSuite:
     val delays = scs.map(_.delay)
     assertEquals(delays, delays.sorted, "délais croissants")
   }
+
+  test("phase-type : compétition exacte + chemin replié (états fantômes masqués)") {
+    // g:0->1 Erlang(2,4) en course avec g:0->2 Exp(2) -> P(g=1)=2/3 (pas 1/2).
+    val net = AutomataNetwork.of(
+      Automaton(
+        "g",
+        3,
+        List(
+          Transition("g", 0, 1, Nil, Distribution.Erlang(2, 4.0)),
+          Transition("g", 0, 2, Nil, Distribution.Exponential(2.0))
+        )
+      )
+    )
+    val scs = Scenarios.topK(net, ctx("g=0"), LocalState("g", 1), 5)
+    assert(scs.nonEmpty)
+    // le scénario le plus probable atteint g=1 avec proba 2/3 (et non 1/2)
+    assertEqualsDouble(scs.head.probability, 2.0 / 3.0, 1e-9)
+    // aucun niveau fantôme (>= 3) ne doit apparaître dans le chemin affiché
+    val niveaux = scs.flatMap(_.transitions).flatMap(t => List(t.from, t.to))
+    assert(niveaux.forall(_ < 3), s"niveaux fantômes non repliés : $niveaux")
+    // la transition logique g:0->1 est présente
+    assert(scs.head.transitions.exists(t => t.automaton == "g" && t.from == 0 && t.to == 1))
+  }
