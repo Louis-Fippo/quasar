@@ -5,6 +5,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Unreleased]
 
+### Correctif (soundness) : CEGAR quantitatif & phase-type
+
+- **analysis/QuantCegar.bracket** : appliquait la chaîne de saut sur le réseau
+  **brut**, donc une transition phase-type (Erlang/PhaseType) était réduite à son
+  taux moyen → encadrement **FAUX** (non sound). Ex. `phasetype-demo` (Erlang(2,4)
+  vs Exp(2)) : `[0.5, 0.5]` au lieu de `2/3`, excluant la vraie valeur. Correctif :
+  `Transform.expandPhaseType` appliqué en tête (comme `Quantitative.analyze`), d'où
+  un encadrement exact `[2/3, 2/3]`.
+- **Test** : régression `QuantCegarSuite` (le bracket contient/égale `2/3`).
+
 ### Correctif : `model import --format auto`
 
 - **cli/Console.load** : `--format auto` (valeur par défaut documentée) est

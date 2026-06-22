@@ -35,8 +35,12 @@ object QuantCegar:
       budget: Int = 256,
       maxExpansions: Int = 200_000
   ): QuantBracket =
-    val coneNames = Cone.of(net, goal.automaton)
-    val coneNet = restrict(net, coneNames)
+    // expansion phase-type (D4) : la chaîne de saut doit opérer sur le réseau
+    // expansé (Erlang/PhaseType -> chaînes exponentielles), sinon l'approximation
+    // par taux moyen rend l'encadrement FAUX (non sound) sur ces modèles.
+    val expanded = Transform.expandPhaseType(net)
+    val coneNames = Cone.of(expanded, goal.automaton)
+    val coneNet = restrict(expanded, coneNames)
     val coneTrans = coneNet.transitions
 
     def goalHit(s: Global): Boolean = s.get(goal.automaton).contains(goal.level)
