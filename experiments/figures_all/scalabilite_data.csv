@@ -1,0 +1,8 @@
+modèle,automates,t (s),statut
+phasetype-demo,1,0.0219,ok
+multivalued-demo,2,0.0363,ok
+p53-mdm2,3,0.0375,ok
+cellfate,11,0.0586,ok
+tcr,40,2.7114,ok
+thelper-naldi,65,11.0694,ok
+thelper-aboujaoude,101,,explosion (OOM/timeout)

@@ -8,9 +8,12 @@ scalabilité). Brief complet : `../PLAN_EXPERIMENTAL_validation_chap4.md`.
 
 | Fichier | Rôle |
 |---|---|
-| `validation_chap4.ipynb` | notebook reproductible (exécuté de bout en bout) |
-| `_build_notebook.py` | **générateur** du notebook (source de vérité ; régénère le `.ipynb`) |
-| `figures/` | PNG des figures + données `figN_data.csv` |
+| `validation_chap4.ipynb` | notebook structuré par le plan §4 (H1–H6, focus petits modèles + scalabilité) |
+| `_build_notebook.py` | **générateur** de `validation_chap4.ipynb` |
+| `validation_all_models.ipynb` | notebook **tous modèles** (cohérent avec `retest_all.py`) : matrice H1/H3/H6 + H5 sur les 7 modèles |
+| `_build_notebook_all.py` | **générateur** de `validation_all_models.ipynb` |
+| `retest_all.py` | harnais CLI de re-test H1–H6 (sortie texte, même logique que le notebook tous-modèles) |
+| `figures/`, `figures_all/` | PNG des figures + données CSV |
 | `validation_chap4.bundle` | run-bundle reproductible (modèle + tags) |
 | `acquire_models.sh` | acquisition des modèles externes (GINsim → SBML-qual) |
 | `external/PROVENANCE.md` | provenance/citations des modèles externes (non versionnés) |
