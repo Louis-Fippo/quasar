@@ -1,0 +1,24 @@
+site_name: QUASAR
+site_description: QUantitative And Static Analysis of Regulatory networks
+docs_dir: docs
+
+# Thème intégré (aucune installation requise). Pour un rendu plus riche :
+#   pip install mkdocs-material   puis remplacer par :  theme: { name: material }
+theme:
+  name: readthedocs
+
+nav:
+  - Accueil: index.md
+  - Prise en main: getting-started.md
+  - Guide CLI: usage.md
+  - Conception: conception.md
+  - Bindings Python: python.md
+  - Référence API: api.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - fenced_code
+  - codehilite
+  - toc:
+      permalink: true

@@ -92,3 +92,9 @@ lazy val root = (project in file("."))
   .aggregate(core, io, analysis, verify, biolqm, bench, cli)
   .settings(name := "quasar")
   .settings(publish / skip := true)
+
+// Génère la Scaladoc de tous les modules documentés (cf. docs/api.md).
+addCommandAlias(
+  "docAll",
+  "core/doc; io/doc; analysis/doc; verify/doc; biolqm/doc; cli/doc"
+)
