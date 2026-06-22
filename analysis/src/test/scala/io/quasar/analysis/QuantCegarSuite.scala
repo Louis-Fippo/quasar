@@ -40,6 +40,27 @@ class QuantCegarSuite extends munit.ScalaCheckSuite:
     assertEqualsDouble(br.upper, 0.25, 1e-9)
   }
 
+  test("phase-type : encadrement sound (Erlang(2,4) vs Exp(2) -> 2/3, pas 1/2)") {
+    // l'expansion phase-type doit s'appliquer : sans elle, l'approximation par
+    // taux moyen donnerait [1/2, 1/2], qui EXCLUT la vraie valeur 2/3 (non sound).
+    val net = AutomataNetwork.of(
+      Automaton(
+        "g",
+        3,
+        List(
+          Transition("g", 0, 1, Nil, Distribution.Erlang(2, 4.0)),
+          Transition("g", 0, 2, Nil, Distribution.Exponential(2.0))
+        )
+      )
+    )
+    val br = QuantCegar.bracket(net, ctx("g=0"), LocalState("g", 1))
+    assert(
+      br.lower - 1e-9 <= 2.0 / 3.0 && 2.0 / 3.0 <= br.upper + 1e-9,
+      s"2/3 hors de [${br.lower}, ${br.upper}]"
+    )
+    assertEqualsDouble(br.upper, 2.0 / 3.0, 1e-6) // encadrement exact attendu
+  }
+
   test("but déjà atteint / inatteignable") {
     val net = AutomataNetwork.of(Automaton("a", 2, List(Transition("a", 0, 1))))
     val hit = QuantCegar.bracket(net, ctx("a=1"), LocalState("a", 1))
